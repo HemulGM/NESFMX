@@ -1,9 +1,5 @@
 unit NES.Consts;
 
-{$IFDEF FPC}
-  {$MODE DELPHI}
-{$ENDIF}
-
 interface
 
 uses
@@ -14,7 +10,6 @@ const
   NES_WIDTH = 256;
   NES_HEIGHT = 240;
   NES_FRAME_CYCLES = 89342;
-
   NES_PALETTE: TPalette32 = (
     $FF666666, $FF002A88, $FF1412A7, $FF3B00A4, $FF5C007E, $FF6E0040, $FF6C0600, $FF561D00,
     $FF333500, $FF0B4800, $FF005200, $FF004F08, $FF00404D, $FF000000, $FF000000, $FF000000,
@@ -29,3 +24,4 @@ const
 implementation
 
 end.
+

@@ -1,0 +1,17 @@
+/build/
+*.dcu
+*.identcache
+*.local
+*.dsk
+*.stat
+*.tvsconfig
+__history/
+__recovery/
+
+/LiangliangNES.res
+/LiangliangNES.vrc
+/fmx/Win32/Debug/*
+*.dsv
+*.pyc
+/tests/fixtures/*
+/tests/*

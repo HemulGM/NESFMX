@@ -1,0 +1,33 @@
+object FormMain: TFormMain
+  Left = 0
+  Top = 0
+  Caption = 'Form7'
+  ClientHeight = 613
+  ClientWidth = 916
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnActivate = FormActivate
+  OnDeactivate = FormDeactivate
+  OnKeyDown = FormKeyDown
+  OnKeyUp = FormKeyUp
+  OnShow = FormShow
+  DesignerMasterStyle = 0
+  object ImageCanvas: TImage
+    MultiResBitmap = <
+      item
+      end>
+    Align = Client
+    HitTest = False
+    Size.Width = 916.000000000000000000
+    Size.Height = 613.000000000000000000
+    Size.PlatformDefault = False
+  end
+  object TimerUpdate: TTimer
+    Enabled = False
+    Interval = 1
+    OnTimer = TimerUpdateTimer
+    Left = 448
+    Top = 296
+  end
+end

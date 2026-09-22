@@ -1,22 +1,17 @@
-unit NES.Mapper1;
-
-{$IFDEF FPC}
-  {$MODE DELPHI}
-{$ENDIF}
+unit NES.Mapper.Mmc1;
 
 interface
 
 uses
-  NES.Types,
-  NES.Mapper;
+  NES.Types, NES.Mapper;
 
 type
-  TMapper001 = class(TMapper)
+  TMapperMmc1 = class(TMapper)
   private
-    FPrg: TByteArray;
-    FChr: TByteArray;
+    FPrgRom: TByteArray;
+    FChrMemory: TByteArray;
     FPrgRam: array[0..$1FFF] of UInt8;
-    FChrRam: Boolean;
+    FHasChrRam: Boolean;
     FBoardMirrorMode: TMirrorMode;
     FShiftRegister: UInt8;
     FWriteCount: Integer;
@@ -24,14 +19,17 @@ type
     FChrBank0: UInt8;
     FChrBank1: UInt8;
     FPrgBank: UInt8;
+    FLastWriteCycle: UInt64;
+    FHasLastWrite: Boolean;
     function GetPrgBankCount: Integer;
     function GetChrBankCount4K: Integer;
     function MapPrgBank(Bank: Integer): Integer;
     function MapChrBank4K(Bank: Integer): Integer;
   public
-    constructor Create(const APrg, AChr: TByteArray; AChrRam: Boolean; AMirrorMode: TMirrorMode);
+    constructor Create(const APrgRom, AChrData: TByteArray; AHasChrRam: Boolean; AMirrorMode: TMirrorMode);
     function CpuRead(Address: UInt16; out Value: UInt8): Boolean; override;
     function CpuWrite(Address: UInt16; Value: UInt8): Boolean; override;
+    function CpuWriteTimed(Address: UInt16; Value: UInt8; CpuCycle: UInt64): Boolean; override;
     function PpuRead(Address: UInt16; out Value: UInt8): Boolean; override;
     function PpuWrite(Address: UInt16; Value: UInt8): Boolean; override;
     function GetMirrorMode: TMirrorMode; override;
@@ -40,52 +38,51 @@ type
 
 implementation
 
-constructor TMapper001.Create(const APrg, AChr: TByteArray; AChrRam: Boolean; AMirrorMode: TMirrorMode);
+constructor TMapperMmc1.Create(const APrgRom, AChrData: TByteArray; AHasChrRam: Boolean; AMirrorMode: TMirrorMode);
 begin
   inherited Create;
-  FPrg := Copy(APrg);
-  FChr := Copy(AChr);
-  FChrRam := AChrRam;
+  ValidateMemory(APrgRom, AChrData);
+  FPrgRom := Copy(APrgRom);
+  FChrMemory := Copy(AChrData);
+  FHasChrRam := AHasChrRam;
   FBoardMirrorMode := AMirrorMode;
-  if Length(FChr) = 0 then
-    SetLength(FChr, $2000);
+  if Length(FChrMemory) = 0 then
+    SetLength(FChrMemory, $2000);
   Reset;
 end;
 
-function TMapper001.GetPrgBankCount: Integer;
+function TMapperMmc1.GetPrgBankCount: Integer;
 begin
-  Result := Length(FPrg) div $4000;
+  Result := Length(FPrgRom) div $4000;
   if Result <= 0 then
     Result := 1;
 end;
 
-function TMapper001.GetChrBankCount4K: Integer;
+function TMapperMmc1.GetChrBankCount4K: Integer;
 begin
-  Result := Length(FChr) div $1000;
+  Result := Length(FChrMemory) div $1000;
   if Result <= 0 then
     Result := 1;
 end;
 
-function TMapper001.MapPrgBank(Bank: Integer): Integer;
+function TMapperMmc1.MapPrgBank(Bank: Integer): Integer;
 begin
   Result := Bank mod GetPrgBankCount;
   if Result < 0 then
     Inc(Result, GetPrgBankCount);
 end;
 
-function TMapper001.MapChrBank4K(Bank: Integer): Integer;
+function TMapperMmc1.MapChrBank4K(Bank: Integer): Integer;
 begin
   Result := Bank mod GetChrBankCount4K;
   if Result < 0 then
     Inc(Result, GetChrBankCount4K);
 end;
 
-function TMapper001.CpuRead(Address: UInt16; out Value: UInt8): Boolean;
-var
-  PrgMode: Integer;
-  Bank16K: Integer;
-  Offset: Integer;
+function TMapperMmc1.CpuRead(Address: UInt16; out Value: UInt8): Boolean;
 begin
+  var Bank16K: Integer;
+  var Offset: Integer;
   if (Address >= $6000) and (Address < $8000) then
   begin
     Value := FPrgRam[Address and $1FFF];
@@ -96,7 +93,7 @@ begin
   if not Result then
     Exit;
 
-  PrgMode := (FControl shr 2) and 3;
+  var PrgMode: Integer := (FControl shr 2) and 3;
   case PrgMode of
     0, 1:
       begin
@@ -121,12 +118,10 @@ begin
     end;
   end;
 
-  Value := FPrg[Offset mod Length(FPrg)];
+  Value := FPrgRom[Offset mod Length(FPrgRom)];
 end;
 
-function TMapper001.CpuWrite(Address: UInt16; Value: UInt8): Boolean;
-var
-  RegisterValue: UInt8;
+function TMapperMmc1.CpuWrite(Address: UInt16; Value: UInt8): Boolean;
 begin
   if (Address >= $6000) and (Address < $8000) then
   begin
@@ -151,29 +146,44 @@ begin
   if FWriteCount < 5 then
     Exit;
 
-  RegisterValue := FShiftRegister and $1F;
+  var RegisterValue: UInt8 := FShiftRegister and $1F;
   case (Address shr 13) and 3 of
-    0: FControl := RegisterValue;
-    1: FChrBank0 := RegisterValue;
-    2: FChrBank1 := RegisterValue;
-    3: FPrgBank := RegisterValue;
+    0:
+      FControl := RegisterValue;
+    1:
+      FChrBank0 := RegisterValue;
+    2:
+      FChrBank1 := RegisterValue;
+    3:
+      FPrgBank := RegisterValue;
   end;
 
   FShiftRegister := $10;
   FWriteCount := 0;
 end;
 
-function TMapper001.PpuRead(Address: UInt16; out Value: UInt8): Boolean;
-var
-  ChrMode: Integer;
-  Bank4K: Integer;
-  Offset: Integer;
+function TMapperMmc1.CpuWriteTimed(Address: UInt16; Value: UInt8; CpuCycle: UInt64): Boolean;
 begin
+  if Address >= $8000 then
+  begin
+    // MMC1 ignores the second consecutive write of a CPU RMW instruction.
+    if FHasLastWrite and (CpuCycle > FLastWriteCycle) and (CpuCycle - FLastWriteCycle = 1) then
+      Exit(True);
+    FHasLastWrite := True;
+    FLastWriteCycle := CpuCycle;
+  end;
+  Result := CpuWrite(Address, Value);
+end;
+
+function TMapperMmc1.PpuRead(Address: UInt16; out Value: UInt8): Boolean;
+begin
+  var Bank4K: Integer;
+  var Offset: Integer;
   Result := Address < $2000;
   if not Result then
     Exit;
 
-  ChrMode := (FControl shr 4) and 1;
+  var ChrMode: Integer := (FControl shr 4) and 1;
   if ChrMode = 0 then
   begin
     Bank4K := MapChrBank4K((FChrBank0 and $1E) + (Address div $1000));
@@ -188,20 +198,18 @@ begin
     Offset := Bank4K * $1000 + (Address and $0FFF);
   end;
 
-  Value := FChr[Offset mod Length(FChr)];
+  Value := FChrMemory[Offset mod Length(FChrMemory)];
 end;
 
-function TMapper001.PpuWrite(Address: UInt16; Value: UInt8): Boolean;
-var
-  ChrMode: Integer;
-  Bank4K: Integer;
-  Offset: Integer;
+function TMapperMmc1.PpuWrite(Address: UInt16; Value: UInt8): Boolean;
 begin
-  Result := (Address < $2000) and FChrRam;
+  var Bank4K: Integer;
+  var Offset: Integer;
+  Result := (Address < $2000) and FHasChrRam;
   if not Result then
     Exit;
 
-  ChrMode := (FControl shr 4) and 1;
+  var ChrMode: Integer := (FControl shr 4) and 1;
   if ChrMode = 0 then
   begin
     Bank4K := MapChrBank4K((FChrBank0 and $1E) + (Address div $1000));
@@ -216,35 +224,39 @@ begin
     Offset := Bank4K * $1000 + (Address and $0FFF);
   end;
 
-  FChr[Offset mod Length(FChr)] := Value;
+  FChrMemory[Offset mod Length(FChrMemory)] := Value;
 end;
 
-function TMapper001.GetMirrorMode: TMirrorMode;
+function TMapperMmc1.GetMirrorMode: TMirrorMode;
 begin
   if FBoardMirrorMode = mmFourScreen then
     Exit(mmFourScreen);
 
   case FControl and 3 of
-    0: Result := mmSingle0;
-    1: Result := mmSingle1;
-    2: Result := mmVertical;
+    0:
+      Result := mmSingle0;
+    1:
+      Result := mmSingle1;
+    2:
+      Result := mmVertical;
   else
     Result := mmHorizontal;
   end;
 end;
 
-procedure TMapper001.Reset;
-var
-  I: Integer;
+procedure TMapperMmc1.Reset;
 begin
-  for I := Low(FPrgRam) to High(FPrgRam) do
-    FPrgRam[I] := 0;
+  for var i := Low(FPrgRam) to High(FPrgRam) do
+    FPrgRam[i] := 0;
   FShiftRegister := $10;
   FWriteCount := 0;
   FControl := $0C;
   FChrBank0 := 0;
   FChrBank1 := 0;
   FPrgBank := 0;
+  FHasLastWrite := False;
+  FLastWriteCycle := 0;
 end;
 
 end.
+

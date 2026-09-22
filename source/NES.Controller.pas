@@ -1,16 +1,12 @@
 unit NES.Controller;
 
-{$IFDEF FPC}
-  {$MODE DELPHI}
-{$ENDIF}
-
 interface
 
 uses
   NES.Types;
 
 type
-  TNESButton = (nbA, nbB, nbSelect, nbStart, nbUp, nbDown, nbLeft, nbRight);
+  TNesButton = (nbA, nbB, nbSelect, nbStart, nbUp, nbDown, nbLeft, nbRight);
 
   TController = class
   private
@@ -18,16 +14,16 @@ type
     FShift: UInt8;
     FStrobe: Boolean;
   public
-    procedure SetButton(Button: TNESButton; Pressed: Boolean);
+    procedure SetButton(Button: TNesButton; Pressed: Boolean);
     procedure Write(Value: UInt8);
     function Read: UInt8;
   end;
 
 implementation
 
-procedure TController.SetButton(Button: TNESButton; Pressed: Boolean);
+procedure TController.SetButton(Button: TNesButton; Pressed: Boolean);
 const
-  MASKS: array[TNESButton] of UInt8 = ($01, $02, $04, $08, $10, $20, $40, $80);
+  MASKS: array[TNesButton] of UInt8 = ($01, $02, $04, $08, $10, $20, $40, $80);
 begin
   if Pressed then
     FState := FState or MASKS[Button]
@@ -39,10 +35,8 @@ begin
 end;
 
 procedure TController.Write(Value: UInt8);
-var
-  NewStrobe: Boolean;
 begin
-  NewStrobe := (Value and 1) <> 0;
+  var NewStrobe: Boolean := (Value and 1) <> 0;
   if FStrobe and not NewStrobe then
     FShift := FState;
   FStrobe := NewStrobe;
