@@ -12,6 +12,7 @@ type
     FMapperId: Integer;
     FHeaderMapperId: Integer;
     FValid: Boolean;
+    FLoadNote: string;
   public
     destructor Destroy; override;
     procedure LoadFromFile(const FileName: string);
@@ -20,6 +21,7 @@ type
     property MapperId: Integer read FMapperId;
     property HeaderMapperId: Integer read FHeaderMapperId;
     property Valid: Boolean read FValid;
+    property LoadNote: string read FLoadNote;
   end;
 
 implementation
@@ -67,6 +69,7 @@ begin
   FValid := False;
   FMapperId := -1;
   FHeaderMapperId := -1;
+  FLoadNote := '';
 
   var Stream: TFileStream := TFileStream.Create(FileName, fmOpenRead or fmShareDenyWrite);
   try
@@ -107,7 +110,10 @@ begin
     FHeaderMapperId := FMapperId;
     // Preserve explicit NES 2.0 metadata; legacy corrections require exact payload identity.
     if (Header.Flags7 and $0C) <> $08 then
+    begin
+      FLoadNote := PrepareLegacyRom(FMapperId, PrgRom, ChrRom);
       FMapperId := ResolveLegacyMapper(FMapperId, PrgRom, ChrRom);
+    end;
     case FMapperId of
       MAPPER_NROM:
         FMapper := TMapperNrom.Create(PrgRom, ChrRom, ChrRam, Mirror);

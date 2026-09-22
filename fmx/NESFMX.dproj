@@ -376,6 +376,7 @@
         <DCCReference Include="..\source\NES.Console.pas"/>
         <DCCReference Include="..\source\NES.Consts.pas"/>
         <DCCReference Include="..\source\NES.Controller.pas"/>
+        <DCCReference Include="..\source\NES.Input.pas"/>
         <DCCReference Include="..\source\NES.CPU.pas"/>
         <DCCReference Include="..\source\NES.Mapper.Axrom.pas"/>
         <DCCReference Include="..\source\NES.Mapper.Cnrom.pas"/>

@@ -33,6 +33,7 @@ type
     property Ppu: TPpu read FPpu;
     property Apu: TApu read FApu;
     property Controller1: TController read FController1;
+    property Controller2: TController read FController2;
   end;
 
 implementation
@@ -47,6 +48,7 @@ begin
   FCartridge := TCartridge.Create;
   FController1 := TController.Create;
   FController2 := TController.Create;
+  FController2.PowerPadEnabled := True;
   FBus.Connect(FCartridge, FPpu, FApu, FController1, FController2);
   FCpu.Connect(FBus.CpuRead, FBus.CpuWrite);
 end;

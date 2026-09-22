@@ -33,6 +33,7 @@ uses
   NES.Console in '..\source\NES.Console.pas',
   NES.Consts in '..\source\NES.Consts.pas',
   NES.Controller in '..\source\NES.Controller.pas',
+  NES.Input in '..\source\NES.Input.pas',
   NES.CPU in '..\source\NES.CPU.pas',
   NES.Mapper.Axrom in '..\source\NES.Mapper.Axrom.pas',
   NES.Mapper.Cnrom in '..\source\NES.Mapper.Cnrom.pas',

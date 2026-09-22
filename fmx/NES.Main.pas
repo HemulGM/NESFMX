@@ -5,25 +5,15 @@ interface
 uses
   System.SysUtils, System.Classes, System.Types, System.UITypes, System.IniFiles,
   System.Math, System.Diagnostics, System.IOUtils, FMX.Forms, FMX.Types,
-  FMX.Controls, FMX.Objects, FMX.Graphics, FMX.Dialogs, NES.Console,
-  NES.Controller, NES.Consts, NES.Types, NES.Audio, NES.AudioDiagnostics;
+  FMX.Controls, FMX.Objects, FMX.Graphics, FMX.Dialogs, NES.Console, NES.Input,
+  NES.Consts, NES.Types, NES.Audio, NES.AudioDiagnostics;
 
 type
-  TKeyMap = record
-    A: UInt32;
-    B: UInt32;
-    Select: UInt32;
-    Start: UInt32;
-    Up: UInt32;
-    Down: UInt32;
-    Left: UInt32;
-    Right: UInt32;
-  end;
-
   TAppConfig = record
     Scale: Integer;
     Filter: string;
     Keys: TKeyMap;
+    Keys2: TKeyMap;
   end;
 
   TFormMain = class(TForm)
@@ -37,6 +27,7 @@ type
     procedure TimerUpdateTimer(Sender: TObject);
   private
     FConsole: TNesConsole;
+    FInput: TNesInput;
     FAudio: TNesAudio;
     FAudioDiagnostics: TAudioDiagnostics;
     FConfig: TAppConfig;
@@ -45,6 +36,7 @@ type
     FFrames: Integer;
     FStarted: Boolean;
     FKeysDown: array[0..255] of Boolean;
+    procedure SetKeyState(Code: UInt32; Pressed: Boolean);
     procedure LoadRom(const FileName: string);
     procedure OpenRom;
     procedure ResetClock;
@@ -135,7 +127,7 @@ end;
 function DefaultConfig: TAppConfig;
 begin
   Result.Scale := 2;
-  Result.Filter := 'linear';
+  Result.Filter := 'nearest';
   Result.Keys.A := Ord('Z');
   Result.Keys.B := Ord('X');
   Result.Keys.Select := vkSpace;
@@ -144,6 +136,14 @@ begin
   Result.Keys.Down := vkDown;
   Result.Keys.Left := vkLeft;
   Result.Keys.Right := vkRight;
+  Result.Keys2.A := Ord('G');
+  Result.Keys2.B := Ord('H');
+  Result.Keys2.Select := Ord('T');
+  Result.Keys2.Start := Ord('Y');
+  Result.Keys2.Up := Ord('W');
+  Result.Keys2.Down := Ord('S');
+  Result.Keys2.Left := Ord('A');
+  Result.Keys2.Right := Ord('D');
 end;
 
 procedure WriteConfig(const FileName: string; const Config: TAppConfig);
@@ -153,13 +153,21 @@ begin
     Ini.WriteInteger('Video', 'Scale', Config.Scale);
     Ini.WriteString('Video', 'Filter', Config.Filter);
     Ini.WriteString('Controls', 'A', KeyCodeToName(Config.Keys.A));
+    Ini.WriteString('Controls2', 'A', KeyCodeToName(Config.Keys2.A));
     Ini.WriteString('Controls', 'B', KeyCodeToName(Config.Keys.B));
+    Ini.WriteString('Controls2', 'B', KeyCodeToName(Config.Keys2.B));
     Ini.WriteString('Controls', 'Select', KeyCodeToName(Config.Keys.Select));
+    Ini.WriteString('Controls2', 'Select', KeyCodeToName(Config.Keys2.Select));
     Ini.WriteString('Controls', 'Start', KeyCodeToName(Config.Keys.Start));
+    Ini.WriteString('Controls2', 'Start', KeyCodeToName(Config.Keys2.Start));
     Ini.WriteString('Controls', 'Up', KeyCodeToName(Config.Keys.Up));
+    Ini.WriteString('Controls2', 'Up', KeyCodeToName(Config.Keys2.Up));
     Ini.WriteString('Controls', 'Down', KeyCodeToName(Config.Keys.Down));
+    Ini.WriteString('Controls2', 'Down', KeyCodeToName(Config.Keys2.Down));
     Ini.WriteString('Controls', 'Left', KeyCodeToName(Config.Keys.Left));
+    Ini.WriteString('Controls2', 'Left', KeyCodeToName(Config.Keys2.Left));
     Ini.WriteString('Controls', 'Right', KeyCodeToName(Config.Keys.Right));
+    Ini.WriteString('Controls2', 'Right', KeyCodeToName(Config.Keys2.Right));
   finally
     Ini.Free;
   end;
@@ -190,36 +198,41 @@ begin
       Result.Filter := Defaults.Filter;
 
     Result.Keys.A := ReadMappedKey(Ini, 'Controls', 'A', Defaults.Keys.A);
+    Result.Keys2.A := ReadMappedKey(Ini, 'Controls2', 'A', Defaults.Keys2.A);
     Result.Keys.B := ReadMappedKey(Ini, 'Controls', 'B', Defaults.Keys.B);
+    Result.Keys2.B := ReadMappedKey(Ini, 'Controls2', 'B', Defaults.Keys2.B);
     Result.Keys.Select := ReadMappedKey(Ini, 'Controls', 'Select', Defaults.Keys.Select);
+    Result.Keys2.Select := ReadMappedKey(Ini, 'Controls2', 'Select', Defaults.Keys2.Select);
     Result.Keys.Start := ReadMappedKey(Ini, 'Controls', 'Start', Defaults.Keys.Start);
+    Result.Keys2.Start := ReadMappedKey(Ini, 'Controls2', 'Start', Defaults.Keys2.Start);
     Result.Keys.Up := ReadMappedKey(Ini, 'Controls', 'Up', Defaults.Keys.Up);
+    Result.Keys2.Up := ReadMappedKey(Ini, 'Controls2', 'Up', Defaults.Keys2.Up);
     Result.Keys.Down := ReadMappedKey(Ini, 'Controls', 'Down', Defaults.Keys.Down);
+    Result.Keys2.Down := ReadMappedKey(Ini, 'Controls2', 'Down', Defaults.Keys2.Down);
     Result.Keys.Left := ReadMappedKey(Ini, 'Controls', 'Left', Defaults.Keys.Left);
+    Result.Keys2.Left := ReadMappedKey(Ini, 'Controls2', 'Left', Defaults.Keys2.Left);
     Result.Keys.Right := ReadMappedKey(Ini, 'Controls', 'Right', Defaults.Keys.Right);
+    Result.Keys2.Right := ReadMappedKey(Ini, 'Controls2', 'Right', Defaults.Keys2.Right);
   finally
     Ini.Free;
   end;
 end;
 
-procedure SetButtonState(Console: TNesConsole; KeySym: UInt32; Pressed: Boolean; const Keys: TKeyMap);
+procedure TFormMain.SetKeyState(Code: UInt32; Pressed: Boolean);
 begin
-  if KeySym = Keys.A then
-    Console.Controller1.SetButton(nbA, Pressed);
-  if KeySym = Keys.B then
-    Console.Controller1.SetButton(nbB, Pressed);
-  if KeySym = Keys.Select then
-    Console.Controller1.SetButton(nbSelect, Pressed);
-  if KeySym = Keys.Start then
-    Console.Controller1.SetButton(nbStart, Pressed);
-  if KeySym = Keys.Up then
-    Console.Controller1.SetButton(nbUp, Pressed);
-  if KeySym = Keys.Down then
-    Console.Controller1.SetButton(nbDown, Pressed);
-  if KeySym = Keys.Left then
-    Console.Controller1.SetButton(nbLeft, Pressed);
-  if KeySym = Keys.Right then
-    Console.Controller1.SetButton(nbRight, Pressed);
+  FInput.SetKey(1, Code, Pressed, FConfig.Keys);
+  FInput.SetKey(2, Code, Pressed, FConfig.Keys2);
+  FInput.Apply(1, FConsole.Controller1);
+  FInput.Apply(2, FConsole.Controller2);
+  // Preserve the existing Power Pad mapping on the auxiliary port lines.
+  if Code = FConfig.Keys.A then
+    FConsole.Controller2.SetPowerPadButton(1, Pressed);
+  if Code = FConfig.Keys.B then
+    FConsole.Controller2.SetPowerPadButton(2, Pressed);
+  if Code = FConfig.Keys.Left then
+    FConsole.Controller2.SetPowerPadButton(3, Pressed);
+  if Code = FConfig.Keys.Right then
+    FConsole.Controller2.SetPowerPadButton(4, Pressed);
 end;
 
 { TFormMain }
@@ -233,6 +246,7 @@ begin
   FConfig := LoadOrCreateConfig(System.IOUtils.TPath.Combine(ExtractFilePath(ParamStr(0)), 'config.ini'));
   ClientWidth := NES_WIDTH * FConfig.Scale;
   ClientHeight := NES_HEIGHT * FConfig.Scale;
+  FInput := TNesInput.Create;
   FConsole := TNesConsole.Create;
   FAudio := TNesAudio.Create;
   FAudioDiagnostics := TAudioDiagnostics.Create;
@@ -245,6 +259,7 @@ destructor TFormMain.Destroy;
 begin
   if TimerUpdate <> nil then
     TimerUpdate.Enabled := False;
+  FInput.Free;
   FAudioDiagnostics.Free;
   FAudio.Free;
   FConsole.Free;
@@ -262,8 +277,11 @@ begin
   TimerUpdate.Enabled := False;
   FAudio.Clear;
   FillChar(FKeysDown, SizeOf(FKeysDown), 0);
-  for var button := Low(TNesButton) to High(TNesButton) do
-    FConsole.Controller1.SetButton(button, False);
+  FInput.Clear;
+  FInput.Apply(1, FConsole.Controller1);
+  FInput.Apply(2, FConsole.Controller2);
+  for var button := 1 to 12 do
+    FConsole.Controller2.SetPowerPadButton(button, False);
 end;
 
 procedure TFormMain.FormKeyDown(Sender: TObject; var Key: Word; var KeyChar: WideChar; Shift: TShiftState);
@@ -310,7 +328,7 @@ begin
     end;
   end;
   if not (ssCtrl in Shift) then
-    SetButtonState(FConsole, Code, True, FConfig.Keys);
+    SetKeyState(Code, True);
   Key := 0;
   KeyChar := #0;
 end;
@@ -320,7 +338,7 @@ begin
   var Code: Word := EventKey(Key, KeyChar);
   if Code <= High(FKeysDown) then
     FKeysDown[Code] := False;
-  SetButtonState(FConsole, Code, False, FConfig.Keys);
+  SetKeyState(Code, False);
   Key := 0;
   KeyChar := #0;
 end;
@@ -410,6 +428,7 @@ begin
   FAudioDiagnostics.Clear;
   FConsole.Free;
   FConsole := NewConsole;
+  FInput.Clear;
   FillChar(FKeysDown, SizeOf(FKeysDown), 0);
   FRomPath := FileName;
   Caption := 'NESFMX - ' + ExtractFileName(FRomPath);

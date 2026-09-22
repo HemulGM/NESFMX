@@ -94,26 +94,33 @@ begin
     Exit;
 
   var PrgMode: Integer := (FControl shr 2) and 3;
+  var OuterBank := 0;
+  // SUROM connects CHR A16 to PRG A18, including the fixed bank.
+  if FHasChrRam and (Length(FPrgRom) >= $80000) then
+    OuterBank := FChrBank0 and $10;
   case PrgMode of
     0, 1:
       begin
-        Bank16K := MapPrgBank((FPrgBank and $0E) + ((Address - $8000) div $4000));
+        Bank16K := MapPrgBank(OuterBank or ((FPrgBank and $0E) + ((Address - $8000) div $4000)));
         Offset := Bank16K * $4000 + ((Address - $8000) and $3FFF);
       end;
     2:
       begin
         if Address < $C000 then
-          Bank16K := 0
+          Bank16K := MapPrgBank(OuterBank)
         else
-          Bank16K := MapPrgBank(FPrgBank and $0F);
+          Bank16K := MapPrgBank(OuterBank or (FPrgBank and $0F));
         Offset := Bank16K * $4000 + (Address and $3FFF);
       end;
   else
     begin
       if Address < $C000 then
-        Bank16K := MapPrgBank(FPrgBank and $0F)
+        Bank16K := MapPrgBank(OuterBank or (FPrgBank and $0F))
       else
-        Bank16K := GetPrgBankCount - 1;
+        if FHasChrRam and (GetPrgBankCount > 16) then
+          Bank16K := MapPrgBank(OuterBank or $0F)
+        else
+          Bank16K := GetPrgBankCount - 1;
       Offset := Bank16K * $4000 + (Address and $3FFF);
     end;
   end;

@@ -23,7 +23,7 @@ begin
       Result := TMapperBandai.Create(MapperId = 159, Prg, Chr, HasChrRam, MirrorMode);
     90, 209:
       Result := TMapperJy.Create(MapperId, Prg, Chr, HasChrRam, MirrorMode);
-    8, 13, 15, 32, 34, 70, 71, 79, 88, 99, 112, 113, 144, 152, 154, 206, 228, 232, 240, 242:
+    8, 13, 15, 32, 34, 70, 71, 79, 87, 88, 99, 112, 113, 144, 152, 154, 206, 228, 232, 240, 242:
       Result := TMapperDiscrete.Create(MapperId, Prg, Chr, HasChrRam, MirrorMode, LegacyHeader);
     9, 10:
       Result := TMapperMmcLatch.Create(MapperId = 10, Prg, Chr, HasChrRam, MirrorMode);

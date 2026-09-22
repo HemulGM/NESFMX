@@ -50,7 +50,7 @@ begin
   FIrqPending := False;
   FChrWritable := True;
   case FBoard of
-    8, 13, 34, 79, 99, 113, 144, 228, 240, 242:
+    8, 13, 34, 79, 87, 99, 113, 144, 228, 240, 242:
       Prg32(0);
     32, 88, 112, 154, 206:
       begin
@@ -66,7 +66,7 @@ begin
     CpuWrite($8000, 0);
   if FBoard in [88, 154, 206, 112] then
     UpdateIndexedBanks;
-  FRamEnabled := FBoard in [8, 15, 32, 34, 112];
+  FRamEnabled := FBoard in [8, 15, 32, 34, 112, 242];
 end;
 
 procedure TMapperDiscrete.UpdateIndexedBanks;
@@ -239,6 +239,12 @@ begin
           Chr8((Value and 7) or ((Value shr 3) and 8));
           Mirror(1 - (Value shr 7));
         end;
+        Result := True;
+      end;
+    87:
+      if (Address >= $6000) and (Address < $8000) then
+      begin
+        Chr8(((Value and 1) shl 1) or ((Value and 2) shr 1));
         Result := True;
       end;
     88, 154, 206:
