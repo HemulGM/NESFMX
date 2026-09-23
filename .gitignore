@@ -18,3 +18,5 @@ __recovery/
 /fmx/Linux64/*
 *.~*
 /fmx/Win64/*
+/fmx/Android64/*
+/fmx/Win32/*

@@ -7,6 +7,7 @@ uses
 
 const
   INPUT_KEYBOARD = 0;
+  INPUT_SCREEN_GAMEPAD = 1;
   INPUT_PLAYER_COUNT = 4;
 
 type

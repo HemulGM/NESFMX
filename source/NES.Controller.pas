@@ -7,6 +7,7 @@ uses
 
 type
   TNesButton = (nbA, nbB, nbSelect, nbStart, nbUp, nbDown, nbLeft, nbRight);
+  TNesButtons = set of TNesButton;
 
   TController = class
   private

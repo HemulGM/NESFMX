@@ -12,6 +12,8 @@ type
     FNameTable: array[0..4095] of UInt8;
     FPaletteRam: array[0..31] of UInt8;
     FOam: array[0..255] of UInt8;
+    FLineSprites: array[0..63] of UInt8;
+    FLineSpriteCount: Integer;
     FFrame: TFrameBuffer;
     FDrawingFrame: TFrameBuffer;
     FRenderingLine: Boolean;
@@ -723,16 +725,17 @@ begin
     SpriteHeight := 16
   else
     SpriteHeight := 8;
-  for var i := 0 to 63 do
+  // RenderScanline selected all sprites intersecting this row in OAM order.
+  // Keep pattern reads here: mapper latches/fetch context can change per pixel.
+  for var Candidate := 0 to FLineSpriteCount - 1 do
   begin
+    var i: Integer := FLineSprites[Candidate];
     SpriteY := FOam[i * 4 + 0];
     TileIndex := FOam[i * 4 + 1];
     Attributes := FOam[i * 4 + 2];
     SpriteX := FOam[i * 4 + 3];
     SpriteTop := SpriteY + 1;
 
-    if (Y < SpriteTop) or (Y >= SpriteTop + SpriteHeight) then
-      Continue;
     if (X < SpriteX) or (X >= SpriteX + 8) then
       Continue;
 
@@ -794,6 +797,21 @@ begin
   FRenderFineX := FFineX;
   FRenderingLine := True;
   var Y: Integer := FScanline;
+  // OAM and control registers cannot change during this synchronous render.
+  // Preserve the existing unlimited-sprite behavior (do not impose an 8 limit).
+  FLineSpriteCount := 0;
+  if (FRenderMask and $10) <> 0 then
+  begin
+    var SpriteHeight: Integer := 8;
+    if (FRenderCtrl and $20) <> 0 then
+      SpriteHeight := 16;
+    for var i := 0 to 63 do
+      if (Y > FOam[i * 4]) and (Y <= Integer(FOam[i * 4]) + SpriteHeight) then
+      begin
+        FLineSprites[FLineSpriteCount] := i;
+        Inc(FLineSpriteCount);
+      end;
+  end;
   try
     for var X := 0 to NES_WIDTH - 1 do
     begin

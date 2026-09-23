@@ -14,6 +14,8 @@ implementation
 uses
   {$IF Defined(MSWINDOWS) and not Defined(NES_AUDIO_NULL)}
   NES.Audio.Windows;
+  {$ELSEIF Defined(ANDROID) and not Defined(NES_AUDIO_NULL)}
+  NES.Audio.Android;
   {$ELSEIF Defined(LINUX) and not Defined(ANDROID) and not Defined(NES_AUDIO_NULL)}
   NES.Audio.Linux;
   {$ELSE}
@@ -26,6 +28,8 @@ begin
   Result := TNesNullAudioBackend.Create;
   {$ELSEIF Defined(MSWINDOWS)}
   Result := TNesWindowsAudioBackend.Create;
+  {$ELSEIF Defined(ANDROID)}
+  Result := TNesAndroidAudioBackend.Create;
   {$ELSEIF Defined(LINUX) and not Defined(ANDROID)}
   Result := TNesLinuxAudioBackend.Create;
   {$ELSE}

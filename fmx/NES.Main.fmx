@@ -1,17 +1,22 @@
 object FormMain: TFormMain
   Left = 0
   Top = 0
-  Caption = 'Form7'
-  ClientHeight = 613
-  ClientWidth = 916
+  Caption = 'NESFMX'
+  ClientHeight = 730
+  ClientWidth = 401
+  Fill.Color = claBlack
+  Fill.Kind = Solid
+  SystemStatusBar.BackgroundColor = claBlack
+  SystemStatusBar.Visibility = VisibleAndOverlap
   FormFactor.Width = 320
   FormFactor.Height = 480
-  FormFactor.Devices = [Desktop]
+  FormFactor.Devices = [Desktop, iPhone, iPad]
   OnActivate = FormActivate
   OnDeactivate = FormDeactivate
   OnKeyDown = FormKeyDown
   OnKeyUp = FormKeyUp
-  OnShow = FormShow
+  OnResize = FormResize
+  OnSafeAreaChanged = FormSafeAreaChanged
   DesignerMasterStyle = 0
   object ImageCanvas: TImage
     MultiResBitmap = <
@@ -19,15 +24,50 @@ object FormMain: TFormMain
       end>
     Align = Client
     HitTest = False
-    Size.Width = 916.000000000000000000
-    Size.Height = 613.000000000000000000
+    Size.Width = 401.000000000000000000
+    Size.Height = 680.000000000000000000
     Size.PlatformDefault = False
   end
   object TimerUpdate: TTimer
     Enabled = False
     Interval = 1
     OnTimer = TimerUpdateTimer
-    Left = 448
-    Top = 296
+    Left = 32
+    Top = 136
+  end
+  object LayoutHead: TLayout
+    Align = Top
+    Padding.Left = 9.000000000000000000
+    Padding.Top = 9.000000000000000000
+    Padding.Right = 9.000000000000000000
+    Padding.Bottom = 9.000000000000000000
+    Size.Width = 401.000000000000000000
+    Size.Height = 50.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 2
+    object ButtonOpen: TButton
+      Align = Left
+      CanFocus = False
+      Position.X = 9.000000000000000000
+      Position.Y = 9.000000000000000000
+      Size.Width = 80.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 0
+      Text = 'Open'
+      OnClick = ButtonOpenClick
+    end
+    object LabelStatus: TLabel
+      Align = Client
+      StyledSettings = [Family, Size, Style]
+      Margins.Left = 12.000000000000000000
+      Size.Width = 291.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TextSettings.FontColor = claWhite
+      TextSettings.WordWrap = False
+      Text = 'NESFMX - Open ROM'
+      TabOrder = 1
+    end
   end
 end

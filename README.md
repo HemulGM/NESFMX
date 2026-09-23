@@ -5,11 +5,11 @@ NROM, MMC1–MMC5, UxROM, CNROM, AxROM, Color Dreams, GxROM, Bandai, VRC,
 Sunsoft, RAMBO-1, Namco 108, JY and other boards from the proven ROM collection.
 A list of implementations, test results, and limitations are provided in
 [description of mappers](EXTENDED_MAPPERS.md).
-Audio output is implemented for Windows (Win32/Win64) and Linux64.
+Audio output is implemented for Windows (Win32/Win64), Linux64 and Android (ARM/ARM64).
 
 SDL is no longer required: the window, zoom, keyboard, timer, and PNG images
 are implemented using FMX tools. 44 100 Hz streaming audio, mono PCM16 output via
-Windows WaveOut (`Winapi.MMSystem`) or ALSA (`libasound.so.2`) on Linux:
+Windows WaveOut (`Winapi.MMSystem`), ALSA (`libasound.so.2`) on Linux or Android AudioTrack:
 FMX Media does not provide a queue of arbitrary PCM samples.
 On Windows, third-party DLLs and runtime packages are not needed; on Linux, ALSA is needed.
 
@@ -38,8 +38,8 @@ Overflow and range checks are included in Debug and Release.
 Tested with Delphi 13 / compiler 37.0.
 
 The audio subsystem is separate from the platform API: `NES.Audio` provides a common
-facade, `NES.Audio.Windows` implements output via WaveOut, and `NES.Audio.Linux` —
-via ALSA. The rest of the OS is still
+facade, `NES.Audio.Windows` implements output via WaveOut, `NES.Audio.Linux` via
+ALSA, and `NES.Audio.Android` via AudioTrack. Other operating systems are still
 using the NES.Audio.Null`: emulation continues without sound, the reason is available
 through `Audio.Error` and diagnostics. Native audio has not yet been implemented for these operating systems.
 
@@ -62,6 +62,37 @@ them before releasing buffers. For tests, you can pass your own backend
 to `TNesAudio.Create(Backend)`. The conditional character `NES_AUDIO_NULL` selects
 the device-free mode on any OS, including Windows; in it, samples are counted as
 discarded, `DeviceOpen` and `PositionKnown` remain `False'.
+
+### Sound on Android
+
+Android and Android64 builds automatically select `TNesAndroidAudioBackend`.
+The JNI adapter in `NES.Audio.AudioTrack` uses the system `android.media.AudioTrack`
+through Delphi's `Androidapi.JNI.Media`; no additional native library is needed.
+Android 6.0 / API 23 is required, matching the project's existing minimum SDK.
+
+The track uses `USAGE_GAME`, `MODE_STREAM`, mono PCM16 at 44100 Hz, and
+`write(short[], ..., WRITE_NON_BLOCKING)`. One Java sample array is reused;
+PCM is copied and JNI array elements are released before each Java write.
+Partial and zero writes count the unaccepted samples as dropped without waiting
+or building another queue. AudioTrack handles playback/refilling after underruns.
+
+The backend checks both `getMinBufferSize` (bytes) and the actual track capacity
+(frames). The queue stays within 4096 samples, about 93 ms of PCM. If the device
+requires a larger buffer, initialization reports an error instead of leaving a
+track that can never be filled enough to start. This buffer limit does not imply
+a guaranteed speaker/Bluetooth latency.
+
+`getPlaybackHeadPosition` supplies the unsigned 32-bit playback counter, including
+its sign-bit crossing and wrap. `Clear` pauses and flushes the track, resets queue
+position, and restarts playback when new PCM arrives. Lifetime submitted/dropped
+totals are preserved. `ERROR_DEAD_OBJECT` triggers one recreate-and-write retry;
+other failures are reported through `Audio.Error` and playback is closed.
+Initialization, calls and release all run on the emulation thread.
+
+The ARM and ARM64 native FMX libraries compile with Q+/R+. Automated device-boundary
+tests cover accounting and lifecycle; playback on an Android device still needs
+validation (no ADB device was connected during implementation).
+API reference: [Android AudioTrack](https://developer.android.com/reference/android/media/AudioTrack).
 
 ### Sound in Linux
 

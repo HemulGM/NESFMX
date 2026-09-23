@@ -5,7 +5,14 @@ interface
 uses
   System.SysUtils, System.Classes, System.Types, System.UITypes, System.IniFiles,
   System.Math, FMX.Forms, FMX.Types, FMX.Controls, FMX.Objects, FMX.Graphics,
-  FMX.Dialogs, NES.Input, NES.Consts, NES.Types, NES.Emulation;
+  FMX.Dialogs, NES.Input, NES.Consts, NES.Types, NES.Emulation,
+  FMX.Controls.Presentation, FMX.StdCtrls, FMX.Layouts, NES.Gamepad
+  {$IFDEF ANDROID}
+    , Androidapi.Helpers, Androidapi.JNI.GraphicsContentViewText,
+    Androidapi.JNI.App, Androidapi.JNI.Widget, Androidapi.JNI.Os,
+    Androidapi.JNI.Media, FMX.Platform, FMX.ApplicationEvents,
+    NES.RomPicker.Android
+  {$ENDIF};
 
 type
   TAppConfig = record
@@ -21,27 +28,43 @@ type
   TFormMain = class(TForm)
     ImageCanvas: TImage;
     TimerUpdate: TTimer;
+    LayoutHead: TLayout;
+    ButtonOpen: TButton;
+    LabelStatus: TLabel;
     procedure FormActivate(Sender: TObject);
+    procedure FormResize(Sender: TObject);
     procedure FormDeactivate(Sender: TObject);
     procedure FormKeyUp(Sender: TObject; var Key: Word; var KeyChar: WideChar; Shift: TShiftState);
     procedure FormKeyDown(Sender: TObject; var Key: Word; var KeyChar: WideChar; Shift: TShiftState);
-    procedure FormShow(Sender: TObject);
     procedure TimerUpdateTimer(Sender: TObject);
+    procedure ButtonOpenClick(Sender: TObject);
+    procedure FormSafeAreaChanged(Sender: TObject; const AInsets: TRectF);
   private
     FEmulation: TNesEmulationThread;
+    FGamepad: TNesGamepad;
     FDisplayFrame: TFrameBuffer;
     FSoundErrorShown: Boolean;
     FConfig: TAppConfig;
-    FRomPath: string;
-    FStarted: Boolean;
+    FRomDisplayName: string;
+    FOpeningRom: Boolean;
     FEmulationFaulted: Boolean;
     FKeysDown: array[0..255] of Boolean;
+    {$IFDEF ANDROID}
+    FPicker: TNesAndroidRomPicker;
+    FAppEvents: TApplicationEvents;
+    FInBackground, FActivityPaused: Boolean;
+    function ApplicationStateChanged(Sender: TObject; const AAppEvent: TApplicationEvent; const AContext: TObject): Boolean;
+    procedure PollRomPicker;
+    {$ENDIF}
     procedure SetKeyState(Code: UInt32; Pressed: Boolean);
-    procedure LoadRom(const FileName: string);
+    procedure GamepadChanged(Sender: TObject);
+    procedure SetStatus(const Text: string);
+    procedure SyncActivity;
     procedure OpenRom;
     procedure StopOnError;
     procedure UpdateFrame;
   public
+    procedure LoadRom(const FileName: string; const DisplayName: string = '');
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
 
@@ -253,18 +276,48 @@ end;
 
 { TFormMain }
 
+procedure TFormMain.ButtonOpenClick(Sender: TObject);
+begin
+  try
+    OpenRom;
+  except
+    on E: Exception do
+      ShowMessage(E.Message);
+  end;
+end;
+
 constructor TFormMain.Create(AOwner: TComponent);
 begin
   inherited;
-  Caption := 'NESFMX - Open ROM: Ctrl+O';
+  SetStatus('NESFMX - Open ROM');
+  {$IFDEF ANDROID}
+  // Hardware volume keys control game audio, including before a ROM is loaded.
+  TAndroidHelper.Activity.setVolumeControlStream(TJAudioManager.JavaClass.STREAM_MUSIC);
+  FConfig := LoadOrCreateConfig(TPath.Combine(TPath.GetDocumentsPath, 'config.ini'));
+  FPicker := TNesAndroidRomPicker.Create;
+  FAppEvents := TApplicationEvents.Create(Self);
+  FAppEvents.OnStateChanged := ApplicationStateChanged;
+  {$ELSE}
   Position := TFormPosition.ScreenCenter;
-  Fill.Color := TAlphaColors.Black;
   FConfig := LoadOrCreateConfig(TPath.Combine(ExtractFilePath(ParamStr(0)), 'config.ini'));
   ClientWidth := NES_WIDTH * FConfig.Scale;
-  ClientHeight := NES_HEIGHT * FConfig.Scale;
+  ClientHeight := NES_HEIGHT * FConfig.Scale + Trunc(LayoutHead.Height);
+  {$ENDIF}
+  Fill.Color := TAlphaColors.Black;
+  ImageCanvas.WrapMode := TImageWrapMode.Fit;
   ImageCanvas.DisableInterpolation := SameText(FConfig.Filter, 'nearest');
   ImageCanvas.Bitmap.SetSize(NES_WIDTH, NES_HEIGHT);
   ImageCanvas.Bitmap.Clear(TAlphaColors.Black);
+  FGamepad := TNesGamepad.Create(Self);
+  FGamepad.Name := 'ScreenGamepad';
+  FGamepad.Parent := Self;
+  FGamepad.Align := TAlignLayout.Bottom;
+  FGamepad.OnChange := GamepadChanged;
+  FGamepad.Enabled := False;
+  {$IFNDEF ANDROID}
+  FGamepad.Visible := True;
+  {$ENDIF}
+  FormResize(Self);
   TimerUpdate.Interval := 8;
 end;
 
@@ -272,25 +325,127 @@ destructor TFormMain.Destroy;
 begin
   if TimerUpdate <> nil then
     TimerUpdate.Enabled := False;
+  FreeAndNil(FGamepad); // Detach the native listener before destroying the form.
+  {$IFDEF ANDROID}
+  FreeAndNil(FAppEvents);
+  FreeAndNil(FPicker);
+  {$ENDIF}
   FreeAndNil(FEmulation);
   inherited;
 end;
 
 procedure TFormMain.FormActivate(Sender: TObject);
 begin
-  TimerUpdate.Enabled := (FEmulation <> nil) and not FEmulationFaulted;
+  if FGamepad <> nil then
+    FGamepad.AttachToForm(Self);
+  SyncActivity;
 end;
+
+procedure TFormMain.FormResize(Sender: TObject);
+begin
+  if FGamepad <> nil then
+    FGamepad.Height := TNesGamepad.PreferredHeight(
+      ClientWidth - Padding.Left - Padding.Right,
+      ClientHeight - Padding.Top - Padding.Bottom - LayoutHead.Height);
+end;
+
+procedure TFormMain.GamepadChanged(Sender: TObject);
+begin
+  if FEmulation <> nil then
+    FEmulation.SetButtons(INPUT_SCREEN_GAMEPAD, 1, FGamepad.Buttons);
+end;
+
+procedure TFormMain.SetStatus(const Text: string);
+begin
+  Caption := Text;
+  LabelStatus.Text := Text;
+end;
+
+procedure TFormMain.SyncActivity;
+begin
+  if FGamepad <> nil then
+    FGamepad.Enabled := (FEmulation <> nil) and not FEmulationFaulted and not FOpeningRom;
+  {$IFDEF ANDROID}
+  var Paused := FInBackground or FOpeningRom;
+  if FGamepad <> nil then
+    FGamepad.Enabled := FGamepad.Enabled and not FInBackground;
+  if Paused <> FActivityPaused then
+  begin
+    FActivityPaused := Paused;
+    if FEmulation <> nil then
+      if Paused then
+      begin
+        FormDeactivate(Self);
+        FEmulation.RequestPause;
+      end
+      else if not FEmulationFaulted then
+        FEmulation.RequestResume;
+  end;
+  TimerUpdate.Enabled := not FInBackground and
+    (FOpeningRom or ((FEmulation <> nil) and not FEmulationFaulted));
+  {$ELSE}
+  TimerUpdate.Enabled := (FEmulation <> nil) and not FEmulationFaulted;
+  {$ENDIF}
+end;
+
+{$IFDEF ANDROID}
+function TFormMain.ApplicationStateChanged(Sender: TObject; const AAppEvent: TApplicationEvent; const AContext: TObject): Boolean;
+begin
+  case AAppEvent of
+    TApplicationEvent.WillBecomeInactive, TApplicationEvent.EnteredBackground:
+      FInBackground := True;
+    TApplicationEvent.BecameActive:
+      FInBackground := False;
+  else
+    Exit(False);
+  end;
+  SyncActivity;
+  Result := False;
+end;
+
+procedure TFormMain.PollRomPicker;
+begin
+  if not FOpeningRom then
+    Exit;
+  var FileName, DisplayName, Error: string;
+  if not FPicker.Poll(FileName, DisplayName, Error) then
+    Exit;
+  try
+    try
+      if Error <> '' then
+        raise Exception.Create(Error);
+      if FileName <> '' then
+        LoadRom(FileName, DisplayName);
+    except
+      on E: Exception do
+        ShowMessage(E.Message);
+    end;
+  finally
+    FPicker.Finish;
+    FOpeningRom := False;
+    ButtonOpen.Enabled := True;
+    SyncActivity;
+  end;
+end;
+{$ENDIF}
 
 procedure TFormMain.FormDeactivate(Sender: TObject);
 begin
-  // Keep emulation and audio running, but release keys whose key-up may be lost.
+  // Release keys whose key-up may be lost. Android lifecycle controls pausing.
   FillChar(FKeysDown, SizeOf(FKeysDown), 0);
+  if FGamepad <> nil then
+    FGamepad.ReleaseAll;
   if FEmulation <> nil then
     FEmulation.ClearInput;
 end;
 
 procedure TFormMain.FormKeyDown(Sender: TObject; var Key: Word; var KeyChar: WideChar; Shift: TShiftState);
 begin
+  {$IFDEF ANDROID}
+  // Keep the key intact so FMX delegates volume adjustment/repeat to Android.
+  if Key in [vkVolumeUp, vkVolumeDown, vkVolumeMute] then
+    Exit;
+  {$ENDIF}
   var Code: Word := EventKey(Key, KeyChar);
   var WasDown: Boolean := False;
   if Code <= High(FKeysDown) then
@@ -310,8 +465,12 @@ begin
       try
         FEmulation.RequestReset;
         FEmulationFaulted := False;
-        TimerUpdate.Enabled := True;
-        Caption := 'NESFMX - ' + ExtractFileName(FRomPath);
+        {$IFDEF ANDROID}
+        if FActivityPaused then
+          FEmulation.RequestPause;
+        {$ENDIF}
+        SyncActivity;
+        SetStatus('NESFMX - ' + FRomDisplayName);
       except
         StopOnError;
         raise;
@@ -346,6 +505,11 @@ end;
 
 procedure TFormMain.FormKeyUp(Sender: TObject; var Key: Word; var KeyChar: WideChar; Shift: TShiftState);
 begin
+  {$IFDEF ANDROID}
+  // Android must also receive the release of its volume keys.
+  if Key in [vkVolumeUp, vkVolumeDown, vkVolumeMute] then
+    Exit;
+  {$ENDIF}
   var Code: Word := EventKey(Key, KeyChar);
   if Code <= High(FKeysDown) then
     FKeysDown[Code] := False;
@@ -354,24 +518,22 @@ begin
   KeyChar := #0;
 end;
 
-procedure TFormMain.FormShow(Sender: TObject);
+procedure TFormMain.FormSafeAreaChanged(Sender: TObject; const AInsets: TRectF);
 begin
-  if FStarted then
-    Exit;
-  FStarted := True;
-  try
-    if ParamCount > 0 then
-      LoadRom(ParamStr(1))
-    else
-      OpenRom;
-  except
-    on E: Exception do
-      ShowMessage(E.Message);
-  end;
+  Padding.Left := AInsets.Left;
+  Padding.Top := AInsets.Top;
+  Padding.Right := AInsets.Right;
+  Padding.Bottom := AInsets.Bottom;
+  FormResize(Self);
 end;
 
 procedure TFormMain.TimerUpdateTimer(Sender: TObject);
 begin
+  {$IFDEF ANDROID}
+  PollRomPicker;
+  if FOpeningRom then
+    Exit;
+  {$ENDIF}
   if FEmulationFaulted or not TimerUpdate.Enabled or (FEmulation = nil) then
     Exit;
   try
@@ -389,25 +551,34 @@ begin
   if FEmulation <> nil then
     FEmulation.RequestPause;
   FormDeactivate(Self);
-  Caption := 'NESFMX - Stopped after error - ' + ExtractFileName(FRomPath);
+  SetStatus('NESFMX - Stopped after error - ' + FRomDisplayName);
+  SyncActivity;
 end;
 
-procedure TFormMain.LoadRom(const FileName: string);
+procedure TFormMain.LoadRom(const FileName: string; const DisplayName: string);
 begin
   // Validate first: an invalid ROM leaves the current worker running.
   var NewEmulation := TNesEmulationThread.Create(FileName, FConfig.FourScore);
+  if FGamepad <> nil then
+    FGamepad.ReleaseAll;
   TimerUpdate.Enabled := False;
   FreeAndNil(FEmulation); // Join before replacing the session.
   FEmulation := NewEmulation;
   FillChar(FKeysDown, SizeOf(FKeysDown), 0);
-  FRomPath := FileName;
+  FRomDisplayName := DisplayName;
+  if FRomDisplayName = '' then
+    FRomDisplayName := ExtractFileName(FileName);
   FSoundErrorShown := False;
   try
     ImageCanvas.Bitmap.Clear(TAlphaColors.Black);
     FEmulationFaulted := False;
+    {$IFDEF ANDROID}
+    if FActivityPaused then
+      FEmulation.RequestPause;
+    {$ENDIF}
     FEmulation.Start;
-    TimerUpdate.Enabled := True;
-    Caption := 'NESFMX - ' + ExtractFileName(FRomPath);
+    SyncActivity;
+    SetStatus('NESFMX - ' + FRomDisplayName);
   except
     StopOnError;
     raise;
@@ -416,7 +587,23 @@ end;
 
 procedure TFormMain.OpenRom;
 begin
+  if FOpeningRom then
+    Exit;
+  FOpeningRom := True;
+  ButtonOpen.Enabled := False;
   FormDeactivate(Self);
+  {$IFDEF ANDROID}
+  try
+    SyncActivity;
+    FPicker.Open;
+  except
+    FPicker.Finish;
+    FOpeningRom := False;
+    ButtonOpen.Enabled := True;
+    SyncActivity;
+    raise;
+  end;
+  {$ELSE}
   var Dialog: TOpenDialog := TOpenDialog.Create(Self);
   try
     Dialog.Filter := 'NES ROM (*.nes)|*.nes';
@@ -425,8 +612,11 @@ begin
       LoadRom(Dialog.FileName);
   finally
     Dialog.Free;
+    FOpeningRom := False;
+    ButtonOpen.Enabled := True;
     FormActivate(Self);
   end;
+  {$ENDIF}
 end;
 
 procedure TFormMain.UpdateFrame;
@@ -443,11 +633,11 @@ begin
   if not FEmulationFaulted and (Status.FramesPerSecond > 0) then
   begin
     var NewCaption := Format('NESFMX - %.1f FPS - %s',
-      [Status.FramesPerSecond, ExtractFileName(FRomPath)]);
+      [Status.FramesPerSecond, FRomDisplayName]);
     if Status.AudioError <> '' then
       NewCaption := NewCaption + ' - sound unavailable';
     if Caption <> NewCaption then
-      Caption := NewCaption;
+      SetStatus(NewCaption);
   end;
   if (Status.AudioError <> '') and not FSoundErrorShown then
   begin
@@ -459,9 +649,9 @@ begin
   var Data: TBitmapData;
   if ImageCanvas.Bitmap.Map(TMapAccess.Write, Data) then
   try
-    for var y := 0 to NES_HEIGHT - 1 do
-      for var x := 0 to NES_WIDTH - 1 do
-        Data.SetPixel(x, y, FDisplayFrame[x, y] or $FF000000);
+    for var Y := 0 to NES_HEIGHT - 1 do
+      for var X := 0 to NES_WIDTH - 1 do
+        Data.SetPixel(X, Y, FDisplayFrame[X, Y] or $FF000000);
   finally
     ImageCanvas.Bitmap.Unmap(Data);
   end;

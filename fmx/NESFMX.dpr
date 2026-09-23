@@ -3,7 +3,11 @@
 uses
   System.StartUpCopy,
   FMX.Forms,
+  NES.Gamepad in 'NES.Gamepad.pas',
   NES.Main in 'NES.Main.pas' {FormMain},
+  {$IFDEF ANDROID}
+  NES.RomPicker.Android in 'NES.RomPicker.Android.pas',
+  {$ENDIF}
   NES.Mapper.ColorDreams in '..\source\NES.Mapper.ColorDreams.pas',
   NES.Mapper.Banked in '..\source\NES.Mapper.Banked.pas',
   NES.Mapper.Discrete in '..\source\NES.Mapper.Discrete.pas',
@@ -30,6 +34,10 @@ uses
   NES.Audio.Backend in '..\source\NES.Audio.Backend.pas',
   NES.Audio.Factory in '..\source\NES.Audio.Factory.pas',
   NES.Audio.Null in '..\source\NES.Audio.Null.pas',
+  {$IF Defined(ANDROID) and not Defined(NES_AUDIO_NULL)}
+  NES.Audio.AudioTrack in '..\source\NES.Audio.AudioTrack.pas',
+  NES.Audio.Android in '..\source\NES.Audio.Android.pas',
+  {$ENDIF}
   {$IF Defined(MSWINDOWS) and not Defined(NES_AUDIO_NULL)}
   NES.Audio.Windows in '..\source\NES.Audio.Windows.pas',
   {$ENDIF}

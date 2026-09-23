@@ -4,7 +4,7 @@ interface
 
 uses
   System.Classes, System.SysUtils, System.SyncObjs, NES.Types, NES.Console,
-  NES.Input, NES.Audio, NES.AudioDiagnostics;
+  NES.Input, NES.Audio, NES.AudioDiagnostics, NES.Controller;
 
 type
   TEmulationStatus = record
@@ -26,7 +26,7 @@ type
     FWake: TEvent;
     FRomPath: string;
     FPowerPad: array[1..4] of Boolean;
-    FResetRequested, FPauseRequested: Boolean;
+    FResetRequested, FPauseRequested, FResumeRequested: Boolean;
     FFrame: TFrameBuffer;
     FFramePending: Boolean;
     FStatus: TEmulationStatus;
@@ -41,8 +41,10 @@ type
     procedure SetKey(Code: UInt32; Pressed: Boolean; const Keys, Keys2: TKeyMap); overload;
     procedure SetKey(Code: UInt32; Pressed: Boolean; const Keys, Keys2, Keys3, Keys4: TKeyMap); overload;
     procedure ClearInput;
+    procedure SetButtons(Source: UInt32; Player: Integer; const Buttons: TNesButtons);
     procedure RequestReset;
     procedure RequestPause;
+    procedure RequestResume;
     function TakeSnapshot(var Frame: TFrameBuffer; out Status: TEmulationStatus): Boolean;
     procedure SaveDiagnostics(const Prefix: string);
   end;
@@ -125,12 +127,24 @@ begin
   end;
 end;
 
+procedure TNesEmulationThread.SetButtons(Source: UInt32; Player: Integer; const Buttons: TNesButtons);
+begin
+  FLock.Enter;
+  try
+    for var Button := Low(TNesButton) to High(TNesButton) do
+      FInput.SetButton(Source, Player, Button, Button in Buttons);
+  finally
+    FLock.Leave;
+  end;
+end;
+
 procedure TNesEmulationThread.RequestReset;
 begin
   FLock.Enter;
   try
     FResetRequested := True;
     FPauseRequested := False;
+    FResumeRequested := False;
     FStatus.Error := '';
     FFramePending := False;
   finally
@@ -144,6 +158,19 @@ begin
   FLock.Enter;
   try
     FPauseRequested := True;
+    FResumeRequested := False;
+  finally
+    FLock.Leave;
+  end;
+  FWake.SetEvent;
+end;
+
+procedure TNesEmulationThread.RequestResume;
+begin
+  FLock.Enter;
+  try
+    FResumeRequested := True;
+    FPauseRequested := False;
   finally
     FLock.Leave;
   end;
@@ -223,17 +250,21 @@ begin
   var FpsStart := NextFrame;
   var Frames := 0;
   var Paused := False;
+  var Failed := False;
   while not Terminated do
   begin
     try
       var ResetRequested: Boolean;
       var PauseRequested: Boolean;
+      var ResumeRequested: Boolean;
       FLock.Enter;
       try
         ResetRequested := FResetRequested;
         FResetRequested := False;
         PauseRequested := FPauseRequested;
         FPauseRequested := False;
+        ResumeRequested := FResumeRequested;
+        FResumeRequested := False;
         FInput.Apply(1, FConsole.Controller1);
         FInput.Apply(2, FConsole.Controller2);
         FInput.Apply(3, FConsole.Controller3);
@@ -260,6 +291,14 @@ begin
         FpsStart := NextFrame;
         Frames := 0;
         Paused := False;
+        Failed := False;
+      end;
+      if ResumeRequested and Paused and not Failed then
+      begin
+        Paused := False;
+        NextFrame := TStopwatch.GetTimeStamp;
+        FpsStart := NextFrame;
+        Frames := 0;
       end;
       if PauseRequested then
       begin
@@ -324,6 +363,7 @@ begin
         FAudio.Clear;
         Paused := True;
         FLock.Enter;
+        Failed := True;
         try
           // A reset submitted during the failed frame supersedes its error.
           if not FResetRequested then
