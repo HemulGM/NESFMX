@@ -1,157 +1,148 @@
 # NESFMX — Delphi / FireMonkey
 
-Эмулятор NES на Delphi с интерфейсом FMX. Поддерживаются 47 номеров мапперов:
+A Delphi NES emulator with an FMX interface. 47 mapper numbers are supported:
 NROM, MMC1–MMC5, UxROM, CNROM, AxROM, Color Dreams, GxROM, Bandai, VRC,
-Sunsoft, RAMBO-1, Namco 108, JY и другие платы из проверенной коллекции ROM.
-Перечень реализаций, результаты тестов и ограничения приведены в
-[описании мапперов](tests/EXTENDED_MAPPERS.md).
-Аудиовывод реализован для Windows (Win32/Win64) и Linux64.
+Sunsoft, RAMBO-1, Namco 108, JY and other boards from the proven ROM collection.
+A list of implementations, test results, and limitations are provided in
+[description of mappers](EXTENDED_MAPPERS.md).
+Audio output is implemented for Windows (Win32/Win64) and Linux64.
 
-SDL больше не требуется: окно, масштабирование, клавиатура, таймер и PNG-снимки
-реализованы средствами FMX. Потоковый звук 44 100 Гц, mono PCM16 выводится через
-Windows waveOut (`Winapi.MMSystem`) или ALSA (`libasound.so.2`) на Linux:
-FMX Media не предоставляет очередь произвольных PCM-сэмплов.
-На Windows сторонние DLL и runtime packages не нужны; на Linux нужна ALSA.
+SDL is no longer required: the window, zoom, keyboard, timer, and PNG images
+are implemented using FMX tools. 44 100 Hz streaming audio, mono PCM16 output via
+Windows WaveOut (`Winapi.MMSystem`) or ALSA (`libasound.so.2`) on Linux:
+FMX Media does not provide a queue of arbitrary PCM samples.
+On Windows, third-party DLLs and runtime packages are not needed; on Linux, ALSA is needed.
 
-Эмуляция CPU/PPU/APU и отправка звука выполняются в отдельном потоке
-`NES.Emulation`. Таймер FMX отображает последний готовый кадр: задержки
-интерфейса не останавливают игру и не накапливают очередь кадров.
-Ввод и команды сброса передаются потоку под блокировкой, а при смене ROM
-или закрытии приложения аудиоустройство освобождается в рабочем потоке,
-а консоль — после завершения потока.
+CPU/PPU/APU emulation and audio sending are performed in a separate thread
+`NES.Emulation'. The FMX timer displays the last finished frame:
+interface delays do not stop the game and do not accumulate a queue of frames.
+Input and reset commands are passed to the thread under lock, and when the ROM is changed
+or the application is closed, the audio device is released in the workflow,
+and the console is released after the thread ends.
 
-MMC3 поддерживает банки PRG/CHR, переключение зеркалирования, защиту PRG RAM
-и IRQ по A12 PPU. Adventure Island 2 проверена с переходом в первый уровень.
-Кадр рисуется построчно, поэтому переключение банков между строками сохраняется
-в изображении. Реализованы MMC3B/C и несколько производных плат; MMC6 пока
-не поддерживается. Фильтрация A12 приближённая, точность до каждого такта PPU
-не заявляется. CNROM и GxROM учитывают конфликты шины; AxROM использует вариант
-без конфликтов. Старые iNES-заголовки с подписью `DiskDude!` распознаются
-без изменения ROM на диске. Полной поддержки расширений NES 2.0 пока нет.
+MMC3 supports PRG/CHR banks, mirroring switching, PRG RAM
+and IRQ protection over A12 PPU. Adventure Island 2 has been tested with the transition to the first level.
+The frame is drawn line by line, so switching banks between lines is saved
+in the image. MMC3B/C and several derivative boards are implemented;
+MMC6 is not supported yet. A12 filtering is approximate, the accuracy to each clock cycle of the PPU
+is not stated. CNROM and GxROM account for bus conflicts; AxROM uses
+the conflict-free option. Old iNES headers with the caption `DiskDude!` recognized
+without changing the ROM on the disk. There is no full support for NES 2.0 extensions yet.
 
-## Сборка
+## Assembly
 
-Откройте `fmx/NESFMX.dproj` в RAD Studio с поддержкой Delphi FMX, выберите
-Win32 или Win64 и выполните Build. Форма `fmx/NES.Main.fmx` доступна для
-визуального редактирования. Общее ядро находится в `source/`.
-Проверки переполнения и диапазонов включены в Debug и Release.
-Проверено с Delphi 13 / компилятором 37.0.
+Open `fmx/NESFMX.dproj` in RAD Studio with Delphi FMX support, select
+Win32 or Win64 and run Build. The form `fmx/NES.Main.fmx` is available for
+visual editing. The common core is located in `source/'.
+Overflow and range checks are included in Debug and Release.
+Tested with Delphi 13 / compiler 37.0.
 
-Из RAD Studio Command Prompt:
+The audio subsystem is separate from the platform API: `NES.Audio` provides a common
+facade, `NES.Audio.Windows` implements output via WaveOut, and `NES.Audio.Linux` —
+via ALSA. The rest of the OS is still
+using the NES.Audio.Null`: emulation continues without sound, the reason is available
+through `Audio.Error` and diagnostics. Native audio has not yet been implemented for these operating systems.
 
-```bat
-msbuild fmx\NESFMX.dproj /t:Build /p:Config=Release /p:Platform=Win64
-```
+To add sound for the platform:
 
-Результат: `fmx\Win64\Release\NESFMX.exe`.
-Для 32-битной сборки замените `Win64` на `Win32`.
+1. Create the NES module.Audio.<Platform>` with the implementation of `INesAudioBackend`
+   from `source/NES.Audio.Backend.pas'.
+2. Connect it conditionally to `source/NES.Audio.Factory.pas` and add a branch
+   creations in the 'CreatePlatformAudioBackend'. The OS API dependencies remain
+inside the platform module.
+3. Implement non-blocking PCM16 mono 44100 Hz reception, queue clearing,
+   queue status and error message. `Submit` copies the input data
+   until return; the queue is limited to four blocks of 1024 samples each.
+   Counters of accepted/discarded samples are saved after `Clear`;
+   the device position only makes sense if `PositionKnown = True'.
 
-Аудиоподсистема отделена от платформенного API: `NES.Audio` предоставляет общий
-фасад, `NES.Audio.Windows` реализует вывод через waveOut, а `NES.Audio.Linux` —
-через ALSA. На остальных ОС пока
-используется `NES.Audio.Null`: эмуляция продолжается без звука, причина доступна
-через `Audio.Error` и диагностику. Нативный звук для этих ОС ещё не реализован.
+The 'NES.Emulation` thread creates, uses, and releases a device in its
+`Execute'; the implementation itself synchronizes native callbacks and stops
+them before releasing buffers. For tests, you can pass your own backend
+to `TNesAudio.Create(Backend)`. The conditional character `NES_AUDIO_NULL` selects
+the device-free mode on any OS, including Windows; in it, samples are counted as
+discarded, `DeviceOpen` and `PositionKnown` remain `False'.
 
-Чтобы добавить звук для платформы:
+### Sound in Linux
 
-1. Создайте модуль `NES.Audio.<Platform>` с реализацией `INesAudioBackend`
-   из `source/NES.Audio.Backend.pas`.
-2. Подключите его условно в `source/NES.Audio.Factory.pas` и добавьте ветку
-   создания в `CreatePlatformAudioBackend`. Зависимости от API ОС остаются
-   внутри платформенного модуля.
-3. Реализуйте неблокирующий приём PCM16 mono 44100 Гц, очистку очереди,
-   состояние очереди и сообщение об ошибке. `Submit` копирует входные данные
-   до возврата; очередь ограничена четырьмя блоками по 1024 сэмпла.
-   Счётчики принятых/отброшенных сэмплов сохраняются после `Clear`;
-   позиция устройства имеет смысл только при `PositionKnown = True`.
+When building Linux64` the factory automatically selects `TNesLinuxAudioBackend'.
+It dynamically loads the system `libasound.so.2'; the C API declarations are
+in the 'NES.Audio.Alsa`. Static linking with ALSA and its headers
+are not needed for Delphi assembly. The FMX application itself requires FMX support for Linux and the SDK.
 
-Поток `NES.Emulation` создаёт, использует и освобождает устройство в своём
-`Execute`; реализация сама синхронизирует нативные callbacks и останавливает
-их перед освобождением буферов. Для тестов можно передать собственный backend
-в `TNesAudio.Create(Backend)`. Условный символ `NES_AUDIO_NULL` выбирает режим
-без устройства на любой ОС, включая Windows; в нём сэмплы учитываются как
-отброшенные, `DeviceOpen` и `PositionKnown` остаются `False`.
+Data path: APU → PCM16 mono 44100 Hz → `TNesAudio` → ALSA `default` →
+audio output configured in the system. `default` allows you to use the settings
+ALSA, including routing via PulseAudio/PipeWire, if
+the corresponding ALSA plugin is installed and configured. This is not a direct connection to the API of these
+servers. In WSL, the sound goes through the configured ALSA plug-in to WSLg/PulseAudio.
 
-### Звук в Linux
+'snd_pcm_open` uses `SND_PCM_NONBLOCK`, and `snd_pcm_writei' copies the PCM
+to the ALSA queue. Emulation does not wait for playback: when there is a full queue or partial
+recording, the remaining samples are counted as discarded. The amount
+of queued data is limited to 4096 samples (about 93 ms); the initial filling
+before the explicit start is about 46 ms. These are the parameters of the client buffer, and not
+a guarantee of a full delay to the speakers: the server/device can add its own.
 
-При сборке Linux64 фабрика автоматически выбирает `TNesLinuxAudioBackend`.
-Он динамически загружает системную `libasound.so.2`; объявления C API находятся
-в `NES.Audio.Alsa`. Статическая линковка с ALSA и её заголовки для сборки Delphi
-не нужны. Для самого FMX-приложения необходимы поддержка FMX для Linux и SDK.
+After underrun (`EPIPE`) or suspension (`ESTRPIPE`), the backend calls
+`snd_pcm_prepare` and starts filling the queue again, without a waiting cycle.
+`Clear` performs `snd_pcm_drop` + `snd_pcm_prepare'; closing resets the queue
+without waiting for it to be played. `QueuedBlocks' for ALSA is the equivalent of the number
+of 1024 sample blocks, since ALSA stores the stream, not the boundaries of our blocks.
+The playback position is calculated based on the number of samples received and the ALSA delay;
+if the position is unknown, `PositionKnown = False'. Reset/Restore starts
+a new position count, keeping the total counters of sending and loss.
 
-Путь данных: APU → PCM16 mono 44100 Гц → `TNesAudio` → ALSA `default` →
-настроенный в системе аудиовыход. `default` позволяет использовать настройки
-ALSA, в том числе маршрутизацию через PulseAudio/PipeWire, если установлен и
-настроен соответствующий ALSA-плагин. Это не прямое подключение к API этих
-серверов. В WSL звук идёт через настроенный ALSA-плагин к WSLg/PulseAudio.
+If the library, device, or desired format are not available, the error gets into
+`Audio.Error` and diagnostics, but the emulation continues without sound. To check
+the `default` setting, you can use `aplay -L'. An alternative device name
+can be passed to the `TNesLinuxAudioBackend' constructor.Create('name')`.
 
-`snd_pcm_open` использует `SND_PCM_NONBLOCK`, а `snd_pcm_writei` копирует PCM
-в очередь ALSA. Эмуляция не ждёт проигрывания: при полной очереди или частичной
-записи оставшиеся сэмплы учитываются как отброшенные. Объём поставленных в
-очередь данных ограничен 4096 сэмплами (около 93 мс); первоначальное заполнение
-перед явным стартом — около 46 мс. Это параметры клиентского буфера, а не
-гарантия полной задержки до динамиков: сервер/устройство могут добавлять свою.
+API Contracts: [ALSA PCM](https://www.alsa-project.org/alsa-doc/alsa-lib/pcm.html ),
+[function reference](https://www.alsa-project.org/alsa-doc/alsa-lib/group___p_c_m.html ).
 
-После underrun (`EPIPE`) или приостановки (`ESTRPIPE`) backend вызывает
-`snd_pcm_prepare` и начинает заполнять очередь заново, без цикла ожидания.
-`Clear` выполняет `snd_pcm_drop` + `snd_pcm_prepare`; закрытие сбрасывает очередь
-без ожидания её проигрывания. `QueuedBlocks` для ALSA — эквивалент количества
-блоков по 1024 сэмпла, поскольку ALSA хранит поток, а не границы наших блоков.
-Позиция воспроизведения вычисляется по числу принятых сэмплов и задержке ALSA;
-при неизвестной позиции `PositionKnown = False`. Сброс/восстановление начинает
-новый отсчёт позиции, сохраняя суммарные счётчики отправки и потерь.
+## Launch and management
 
-Если библиотека, устройство или нужный формат недоступны, ошибка попадает в
-`Audio.Error` и диагностику, а эмуляция продолжается без звука. Для проверки
-настройки `default` можно использовать `aplay -L`. Альтернативное имя устройства
-можно передать в конструктор `TNesLinuxAudioBackend.Create('имя')`.
-
-Контракты API: [ALSA PCM](https://www.alsa-project.org/alsa-doc/alsa-lib/pcm.html),
-[справочник функций](https://www.alsa-project.org/alsa-doc/alsa-lib/group___p_c_m.html).
-
-## Запуск и управление
-
-Запустите EXE и выберите `.nes` в диалоге либо передайте путь в командной строке:
+Run the EXE and select `.nes` in the dialog or pass the path in the command line:
 
 ```bat
 fmx\Win64\Release\NESFMX.exe "C:\ROMs\game.nes"
 ```
 
-| Клавиша | Действие |
+| Key | Action |
 | --- | --- |
 | Z / X | A / B |
 | Space / Enter | Select / Start |
-| Стрелки | Направления |
-| G / H | A / B второго игрока |
-| T / Y | Select / Start второго игрока |
-| W / S / A / D | Вверх / вниз / влево / вправо второго игрока |
-| N / M | A / B третьего игрока |
-| U / O | Select / Start третьего игрока |
-| I / K / J / L | Вверх / вниз / влево / вправо третьего игрока |
-| Num 1 / Num 3 | A / B четвёртого игрока |
-| Num 7 / Num 9 | Select / Start четвёртого игрока |
-| Num 8 / Num 5 / Num 4 / Num 6 | Направления четвёртого игрока (Num Lock включён) |
-| Ctrl+O | Открыть другой ROM |
-| R | Сброс консоли |
-| F5 | Сохранить PNG 256×240 в папку «Документы» |
-| F6 | Сохранить последние ~30 секунд звука и диагностику в «Документы» |
-| Esc | Закрыть приложение |
+| Arrows | Directions |
+| G / H | A / B of the second player |
+| T / Y | Select / Start of the second player |
+| W / S / A / D | Up / down / left / right of the second player |
+| N / M | A / B of the third player |
+| U / O | Select / Start of the third player |
+| I / K / J / L | Up / Down / Left / Right of the third player |
+| Num 1 / Num 3 | A / B of the fourth player |
+| Num 7 / Num 9 | Select / Start the fourth player |
+| Num 8 / Num 5 / Num 4 / Num 6 | Directions of the fourth player (Num Lock enabled) |
+| Ctrl+O | "Open" another ROM |
+|R | Reset console |
+| F5 | Save PNG 256×240 to "Documents" folder |
+| F6 | Save the last ~30 seconds of audio and diagnostics to "Documents" |
+| Esc | Close the application |
 
-При потере фокуса эмуляция и звук продолжаются, нажатые кнопки сбрасываются.
-Окно можно масштабировать;
-пропорции изображения сохраняются. Неверный ROM не заменяет текущую игру.
-Если звуковое устройство недоступно, приложение сообщает об этом и работает без звука.
+When you lose focus, the emulation and sound continue, and the pressed buttons are reset.
+The window can be scaled;
+the proportions of the image are preserved. An invalid ROM does not replace the current game.
+If the sound device is unavailable, the app informs you about it and runs without sound.
 
-## Настройки
+## Settings
 
-`config.ini` читается рядом с EXE и создаётся при первом запуске.
-Скопируйте имеющийся INI к собранному EXE, чтобы перенести свои настройки.
-Папка приложения должна быть доступна для записи при создании INI.
+The `config.ini` is read next to the EXE and is created at the first startup.
+Copy the existing INI to the compiled EXE to transfer your settings.
+The application folder must be writable when creating the INI.
 
 ```ini
 [Video]
 Scale=2
-Filter=linear
+Filter=nearest
 [Input]
 FourScore=1
 [Controls]
@@ -192,32 +183,32 @@ Left=NUMPAD4
 Right=NUMPAD6
 ```
 
-Четыре виртуальных геймпада NES управляются с клавиатуры независимо.
-По умолчанию включён адаптер NES Four Score: порт `$4016` передаёт кнопки
-игроков 1 и 3, порт `$4017` — игроков 2 и 4, затем каждый порт передаёт
-сигнатуру адаптера. Игра должна поддерживать Four Score; число игроков
-выбирается в самой игре. Протокол Famicom для четырёх игроков пока не реализован.
-Описание протокола: [NESdev](https://www.nesdev.org/wiki/Controller_detection#Four_Score).
+Four virtual NES gamepads are independently controlled from the keyboard.
+By default, the NES Four Score adapter is enabled: port `$4016` transmits buttons
+for players 1 and 3, port `$4017` for players 2 and 4, then each port transmits
+the adapter signature. The game must support Four Score; the number of players
+is selected in the game itself. The Famicom protocol for four players has not yet been implemented.
+Protocol description: [NESdev](https://www.nesdev.org/wiki/Controller_detection#Four_Score ).
 
-Разделы `[Controls]`, `[Controls2]`, `[Controls3]` и `[Controls4] задают
-клавиши соответствующих игроков. Старые INI работают с настройками по умолчанию
-для отсутствующих разделов; существующие назначения сохраняются.
-Для переназначения добавьте нужный раздел в INI и перезапустите приложение.
-`NUMPAD0`–`NUMPAD9` обозначают отдельный цифровой блок; включите Num Lock.
+The sections `[Controls]`, `[Controls2]`, `[Controls3]` and `[Controls4] define
+the keys of the respective players. The old INI works with default settings
+for missing partitions; existing assignments are retained.
+To reassign, add the required section to the INI and restart the application.
+'NUMPAD0`–`NUMPAD9` denote a separate numeric block; turn on Num Lock.
 
-Для обычных двух контроллеров и прежнего управления Power Pad клавишами
-первого игрока установите `FourScore=0` в разделе `[Input]` и перезапустите
-приложение. В режиме Four Score Power Pad отключён.
-Ввод с физических USB/Bluetooth геймпадов пока не реализован.
+For the usual two controllers and the previous control of the Power Pad with the keys
+of the first player, set `FourScore=0` in the `[Input]` section and restart
+the application. The Power Pad is disabled in Four Score mode.
+Input from physical USB/Bluetooth gamepads has not yet been implemented.
 
-Ввод отделён от формы в `source/NES.Input.pas`: `TNesInput` хранит состояния
-четырёх игроков по идентификаторам источников (0 — клавиатура). Будущий обработчик
-внешнего устройства передаёт кнопки через `SetButton`, а при отключении вызывает
-`ReleaseSource`. Нажатия источников объединяются: отпускание кнопки на одном
-устройстве не отменяет нажатие на другом. `Apply` передаёт итоговое состояние
-в порт NES; `Clear` сбрасывает все источники при потере фокуса или смене ROM.
+The input is separated from the form in `source/NES.Input.pas`: `TNesInput` stores the states
+of the four players by source IDs (0 is the keyboard). The future handler
+of the external device passes the buttons through the `SetButton', and when disconnected, it calls
+`ReleaseSource`. Source clicks are combined: releasing a button on one
+device does not cancel pressing on the other. `Apply` transmits the final state
+to the NES port; `Clear' resets all sources when focus is lost or ROM is changed.
 
-`Scale` ограничен диапазоном 1–8. `Filter=nearest` отключает интерполяцию,
-`linear` включает её. Допустимые назначения: A–Z, 0–9, SPACE, RETURN/ENTER,
-UP, DOWN, LEFT, RIGHT, NUMPAD0–NUMPAD9. Некорректные назначения заменяются значениями по умолчанию.
-R, F5, F6, Esc и Ctrl+O используются как служебные сочетания.
+`Scale` is limited to the range 1-8. `Filter=nearest` disables interpolation,
+`linear` includes it. Valid assignments are: A–Z, 0-9, SPACE, RETURN/ENTER,
+UP, DOWN, LEFT, RIGHT, NUMPAD0–NUMPAD9. Incorrect assignments are replaced with default values.
+R, F5, F6, Esc, and Ctrl+O are used as service combinations.
