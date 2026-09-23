@@ -261,7 +261,7 @@ begin
     raise EArgumentOutOfRangeException.Create('Invalid audio sample count');
   if Count = 0 then
     Exit;
-  var Pending, ToWrite: Integer;
+  var Pending: Integer;
   var Played: Cardinal;
   if not ReadQueue(Pending, Played) then
   begin

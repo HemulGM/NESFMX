@@ -81,7 +81,7 @@ begin
   FRomPath := FileName;
   FSaveDirectory := SaveDirectory;
   if FSaveDirectory = '' then
-    FSaveDirectory := TPath.Combine(TPath.Combine(TPath.GetDocumentsPath, 'NESFMX'), 'Saves');
+    FSaveDirectory := ResolveDefaultSaveDirectory(TPath.GetDocumentsPath, TPath.GetHomePath);
   FConsole := TNesConsole.Create(FourScoreEnabled);
   FConsole.LoadRom(FileName, RegionOverride);
   FSnapshotDirectory := ResolveGameSavePath(TPath.Combine(

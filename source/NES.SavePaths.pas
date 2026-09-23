@@ -6,11 +6,24 @@ interface
 // Existing paths are reused by hash alone, including legacy hash-only names.
 
 function ResolveGameSavePath(const Root, RomFileName, Hash, Extension: string): string;
+function ResolveDefaultSaveDirectory(const DocumentsDirectory, HomeDirectory: string): string;
 
 implementation
 
 uses
   System.SysUtils, System.IOUtils, System.StrUtils;
+
+function ResolveDefaultSaveDirectory(const DocumentsDirectory, HomeDirectory: string): string;
+begin
+  // Linux may have no XDG Documents entry. Never turn that into a path
+  // relative to the executable: NESFMX can then collide with the binary.
+  var Root := DocumentsDirectory;
+  if (Root = '') or not TPath.IsPathRooted(Root) then
+    Root := HomeDirectory;
+  if (Root = '') or not TPath.IsPathRooted(Root) then
+    raise EInOutError.Create('Cannot determine an absolute save directory');
+  Result := TPath.Combine(TPath.Combine(Root, 'NESFMX'), 'Saves');
+end;
 
 function ResolveGameSavePath(const Root, RomFileName, Hash, Extension: string): string;
 begin

@@ -126,7 +126,7 @@ begin
     Move(Digest[0], Header.Digest[0], SizeOf(Header.Digest));
     Output.WriteBuffer(Header, SizeOf(Header));
     Output.WriteBuffer(Payload.Memory^, Payload.Size);
-    ForceDirectories(ExtractFilePath(ExpandFileName(FileName)));
+    TDirectory.CreateDirectory(ExtractFilePath(ExpandFileName(FileName)));
     var Id: TGUID;
     CreateGUID(Id);
     var Temporary := FileName + '.' + GUIDToString(Id) + '.tmp';
