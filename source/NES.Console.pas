@@ -16,10 +16,12 @@ type
     FCartridge: TCartridge;
     FController1: TController;
     FController2: TController;
+    FController3: TController;
+    FController4: TController;
     FMasterClock: UInt64;
     FDmcDmaCycles: Integer;
   public
-    constructor Create;
+    constructor Create(FourScoreEnabled: Boolean = False);
     destructor Destroy; override;
     procedure LoadRom(const FileName: string);
     procedure Reset;
@@ -34,11 +36,13 @@ type
     property Apu: TApu read FApu;
     property Controller1: TController read FController1;
     property Controller2: TController read FController2;
+    property Controller3: TController read FController3;
+    property Controller4: TController read FController4;
   end;
 
 implementation
 
-constructor TNesConsole.Create;
+constructor TNesConsole.Create(FourScoreEnabled: Boolean);
 begin
   inherited Create;
   FCpu := TCpu6502.Create;
@@ -48,13 +52,19 @@ begin
   FCartridge := TCartridge.Create;
   FController1 := TController.Create;
   FController2 := TController.Create;
-  FController2.PowerPadEnabled := True;
-  FBus.Connect(FCartridge, FPpu, FApu, FController1, FController2);
+  FController3 := TController.Create;
+  FController4 := TController.Create;
+  FController2.PowerPadEnabled := not FourScoreEnabled;
+  FBus.FourScoreEnabled := FourScoreEnabled;
+  FBus.Connect(FCartridge, FPpu, FApu, FController1, FController2,
+    FController3, FController4);
   FCpu.Connect(FBus.CpuRead, FBus.CpuWrite);
 end;
 
 destructor TNesConsole.Destroy;
 begin
+  FController4.Free;
+  FController3.Free;
   FController2.Free;
   FController1.Free;
   FCartridge.Free;

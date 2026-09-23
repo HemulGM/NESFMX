@@ -28,6 +28,7 @@ type
   public
     constructor Create;
     procedure Clear;
+    function Clone: TAudioDiagnostics;
     procedure Capture(Console: TNesConsole; Audio: TNesAudio; const Samples: array of SmallInt; Count: Integer);
     procedure Save(const Prefix, RomPath, AudioError: string);
     property Count: Integer read FCount;
@@ -45,6 +46,19 @@ procedure TAudioDiagnostics.Clear;
 begin
   FNext := 0;
   FCount := 0;
+end;
+
+function TAudioDiagnostics.Clone: TAudioDiagnostics;
+begin
+  Result := TAudioDiagnostics.Create;
+  try
+    Result.FFrames := Copy(FFrames);
+    Result.FNext := FNext;
+    Result.FCount := FCount;
+  except
+    Result.Free;
+    raise;
+  end;
 end;
 
 procedure TAudioDiagnostics.Capture(Console: TNesConsole; Audio: TNesAudio; const Samples: array of SmallInt; Count: Integer);
@@ -96,7 +110,7 @@ begin
     Info.WriteLine('Executable: ' + ParamStr(0));
     Info.WriteLine('Captured: ' + DateTimeToStr(Now));
     Info.WriteLine('Audio error: ' + AudioError);
-    Info.WriteLine('WAV contains APU output before waveOut; it is not a microphone or loopback recording.');
+    Info.WriteLine('WAV contains APU output before the audio backend; it is not a microphone or loopback recording.');
     Info.WriteLine('CSV counters are cumulative; clears increments when playback position resets.');
   finally
     Info.Free;

@@ -4,9 +4,8 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Types, System.UITypes, System.IniFiles,
-  System.Math, System.Diagnostics, System.IOUtils, FMX.Forms, FMX.Types,
-  FMX.Controls, FMX.Objects, FMX.Graphics, FMX.Dialogs, NES.Console, NES.Input,
-  NES.Consts, NES.Types, NES.Audio, NES.AudioDiagnostics;
+  System.Math, FMX.Forms, FMX.Types, FMX.Controls, FMX.Objects, FMX.Graphics,
+  FMX.Dialogs, NES.Input, NES.Consts, NES.Types, NES.Emulation;
 
 type
   TAppConfig = record
@@ -14,6 +13,9 @@ type
     Filter: string;
     Keys: TKeyMap;
     Keys2: TKeyMap;
+    Keys3: TKeyMap;
+    Keys4: TKeyMap;
+    FourScore: Boolean;
   end;
 
   TFormMain = class(TForm)
@@ -26,20 +28,18 @@ type
     procedure FormShow(Sender: TObject);
     procedure TimerUpdateTimer(Sender: TObject);
   private
-    FConsole: TNesConsole;
-    FInput: TNesInput;
-    FAudio: TNesAudio;
-    FAudioDiagnostics: TAudioDiagnostics;
+    FEmulation: TNesEmulationThread;
+    FDisplayFrame: TFrameBuffer;
+    FSoundErrorShown: Boolean;
     FConfig: TAppConfig;
     FRomPath: string;
-    FNextFrame, FFpsStart: Int64;
-    FFrames: Integer;
     FStarted: Boolean;
+    FEmulationFaulted: Boolean;
     FKeysDown: array[0..255] of Boolean;
     procedure SetKeyState(Code: UInt32; Pressed: Boolean);
     procedure LoadRom(const FileName: string);
     procedure OpenRom;
-    procedure ResetClock;
+    procedure StopOnError;
     procedure UpdateFrame;
   public
     constructor Create(AOwner: TComponent); override;
@@ -51,6 +51,9 @@ var
   FormMain: TFormMain;
 
 implementation
+
+uses
+  System.IOUtils;
 
 {$R *.fmx}
 
@@ -64,6 +67,9 @@ end;
 function KeyNameToCode(const Name: string): UInt32;
 begin
   var NormalizedName: string := UpperCase(Trim(Name));
+  if (Length(NormalizedName) = 7) and (Copy(NormalizedName, 1, 6) = 'NUMPAD') and
+    CharInSet(NormalizedName[7], ['0'..'9']) then
+    Exit(vkNumpad0 + Ord(NormalizedName[7]) - Ord('0'));
   if NormalizedName = 'Z' then
     Exit(Ord('Z'));
   if NormalizedName = 'X' then
@@ -93,6 +99,8 @@ end;
 
 function KeyCodeToName(KeyCode: UInt32): string;
 begin
+  if (KeyCode >= vkNumpad0) and (KeyCode <= vkNumpad9) then
+    Exit('NUMPAD' + IntToStr(KeyCode - vkNumpad0));
   case KeyCode of
     Ord('Z'):
       Result := 'Z';
@@ -144,6 +152,35 @@ begin
   Result.Keys2.Down := Ord('S');
   Result.Keys2.Left := Ord('A');
   Result.Keys2.Right := Ord('D');
+  Result.Keys3.A := Ord('N');
+  Result.Keys3.B := Ord('M');
+  Result.Keys3.Select := Ord('U');
+  Result.Keys3.Start := Ord('O');
+  Result.Keys3.Up := Ord('I');
+  Result.Keys3.Down := Ord('K');
+  Result.Keys3.Left := Ord('J');
+  Result.Keys3.Right := Ord('L');
+  Result.Keys4.A := vkNumpad1;
+  Result.Keys4.B := vkNumpad3;
+  Result.Keys4.Select := vkNumpad7;
+  Result.Keys4.Start := vkNumpad9;
+  Result.Keys4.Up := vkNumpad8;
+  Result.Keys4.Down := vkNumpad5;
+  Result.Keys4.Left := vkNumpad4;
+  Result.Keys4.Right := vkNumpad6;
+  Result.FourScore := True;
+end;
+
+procedure WriteKeyMap(Ini: TIniFile; const Section: string; const Keys: TKeyMap);
+begin
+  Ini.WriteString(Section, 'A', KeyCodeToName(Keys.A));
+  Ini.WriteString(Section, 'B', KeyCodeToName(Keys.B));
+  Ini.WriteString(Section, 'Select', KeyCodeToName(Keys.Select));
+  Ini.WriteString(Section, 'Start', KeyCodeToName(Keys.Start));
+  Ini.WriteString(Section, 'Up', KeyCodeToName(Keys.Up));
+  Ini.WriteString(Section, 'Down', KeyCodeToName(Keys.Down));
+  Ini.WriteString(Section, 'Left', KeyCodeToName(Keys.Left));
+  Ini.WriteString(Section, 'Right', KeyCodeToName(Keys.Right));
 end;
 
 procedure WriteConfig(const FileName: string; const Config: TAppConfig);
@@ -152,22 +189,11 @@ begin
   try
     Ini.WriteInteger('Video', 'Scale', Config.Scale);
     Ini.WriteString('Video', 'Filter', Config.Filter);
-    Ini.WriteString('Controls', 'A', KeyCodeToName(Config.Keys.A));
-    Ini.WriteString('Controls2', 'A', KeyCodeToName(Config.Keys2.A));
-    Ini.WriteString('Controls', 'B', KeyCodeToName(Config.Keys.B));
-    Ini.WriteString('Controls2', 'B', KeyCodeToName(Config.Keys2.B));
-    Ini.WriteString('Controls', 'Select', KeyCodeToName(Config.Keys.Select));
-    Ini.WriteString('Controls2', 'Select', KeyCodeToName(Config.Keys2.Select));
-    Ini.WriteString('Controls', 'Start', KeyCodeToName(Config.Keys.Start));
-    Ini.WriteString('Controls2', 'Start', KeyCodeToName(Config.Keys2.Start));
-    Ini.WriteString('Controls', 'Up', KeyCodeToName(Config.Keys.Up));
-    Ini.WriteString('Controls2', 'Up', KeyCodeToName(Config.Keys2.Up));
-    Ini.WriteString('Controls', 'Down', KeyCodeToName(Config.Keys.Down));
-    Ini.WriteString('Controls2', 'Down', KeyCodeToName(Config.Keys2.Down));
-    Ini.WriteString('Controls', 'Left', KeyCodeToName(Config.Keys.Left));
-    Ini.WriteString('Controls2', 'Left', KeyCodeToName(Config.Keys2.Left));
-    Ini.WriteString('Controls', 'Right', KeyCodeToName(Config.Keys.Right));
-    Ini.WriteString('Controls2', 'Right', KeyCodeToName(Config.Keys2.Right));
+    Ini.WriteBool('Input', 'FourScore', Config.FourScore);
+    WriteKeyMap(Ini, 'Controls', Config.Keys);
+    WriteKeyMap(Ini, 'Controls2', Config.Keys2);
+    WriteKeyMap(Ini, 'Controls3', Config.Keys3);
+    WriteKeyMap(Ini, 'Controls4', Config.Keys4);
   finally
     Ini.Free;
   end;
@@ -180,6 +206,18 @@ begin
     Result := DefaultKey
   else
     Result := Value;
+end;
+
+function ReadKeyMap(Ini: TIniFile; const Section: string; const Defaults: TKeyMap): TKeyMap;
+begin
+  Result.A := ReadMappedKey(Ini, Section, 'A', Defaults.A);
+  Result.B := ReadMappedKey(Ini, Section, 'B', Defaults.B);
+  Result.Select := ReadMappedKey(Ini, Section, 'Select', Defaults.Select);
+  Result.Start := ReadMappedKey(Ini, Section, 'Start', Defaults.Start);
+  Result.Up := ReadMappedKey(Ini, Section, 'Up', Defaults.Up);
+  Result.Down := ReadMappedKey(Ini, Section, 'Down', Defaults.Down);
+  Result.Left := ReadMappedKey(Ini, Section, 'Left', Defaults.Left);
+  Result.Right := ReadMappedKey(Ini, Section, 'Right', Defaults.Right);
 end;
 
 function LoadOrCreateConfig(const FileName: string): TAppConfig;
@@ -197,22 +235,11 @@ begin
     if Result.Filter = '' then
       Result.Filter := Defaults.Filter;
 
-    Result.Keys.A := ReadMappedKey(Ini, 'Controls', 'A', Defaults.Keys.A);
-    Result.Keys2.A := ReadMappedKey(Ini, 'Controls2', 'A', Defaults.Keys2.A);
-    Result.Keys.B := ReadMappedKey(Ini, 'Controls', 'B', Defaults.Keys.B);
-    Result.Keys2.B := ReadMappedKey(Ini, 'Controls2', 'B', Defaults.Keys2.B);
-    Result.Keys.Select := ReadMappedKey(Ini, 'Controls', 'Select', Defaults.Keys.Select);
-    Result.Keys2.Select := ReadMappedKey(Ini, 'Controls2', 'Select', Defaults.Keys2.Select);
-    Result.Keys.Start := ReadMappedKey(Ini, 'Controls', 'Start', Defaults.Keys.Start);
-    Result.Keys2.Start := ReadMappedKey(Ini, 'Controls2', 'Start', Defaults.Keys2.Start);
-    Result.Keys.Up := ReadMappedKey(Ini, 'Controls', 'Up', Defaults.Keys.Up);
-    Result.Keys2.Up := ReadMappedKey(Ini, 'Controls2', 'Up', Defaults.Keys2.Up);
-    Result.Keys.Down := ReadMappedKey(Ini, 'Controls', 'Down', Defaults.Keys.Down);
-    Result.Keys2.Down := ReadMappedKey(Ini, 'Controls2', 'Down', Defaults.Keys2.Down);
-    Result.Keys.Left := ReadMappedKey(Ini, 'Controls', 'Left', Defaults.Keys.Left);
-    Result.Keys2.Left := ReadMappedKey(Ini, 'Controls2', 'Left', Defaults.Keys2.Left);
-    Result.Keys.Right := ReadMappedKey(Ini, 'Controls', 'Right', Defaults.Keys.Right);
-    Result.Keys2.Right := ReadMappedKey(Ini, 'Controls2', 'Right', Defaults.Keys2.Right);
+    Result.FourScore := Ini.ReadBool('Input', 'FourScore', Defaults.FourScore);
+    Result.Keys := ReadKeyMap(Ini, 'Controls', Defaults.Keys);
+    Result.Keys2 := ReadKeyMap(Ini, 'Controls2', Defaults.Keys2);
+    Result.Keys3 := ReadKeyMap(Ini, 'Controls3', Defaults.Keys3);
+    Result.Keys4 := ReadKeyMap(Ini, 'Controls4', Defaults.Keys4);
   finally
     Ini.Free;
   end;
@@ -220,19 +247,8 @@ end;
 
 procedure TFormMain.SetKeyState(Code: UInt32; Pressed: Boolean);
 begin
-  FInput.SetKey(1, Code, Pressed, FConfig.Keys);
-  FInput.SetKey(2, Code, Pressed, FConfig.Keys2);
-  FInput.Apply(1, FConsole.Controller1);
-  FInput.Apply(2, FConsole.Controller2);
-  // Preserve the existing Power Pad mapping on the auxiliary port lines.
-  if Code = FConfig.Keys.A then
-    FConsole.Controller2.SetPowerPadButton(1, Pressed);
-  if Code = FConfig.Keys.B then
-    FConsole.Controller2.SetPowerPadButton(2, Pressed);
-  if Code = FConfig.Keys.Left then
-    FConsole.Controller2.SetPowerPadButton(3, Pressed);
-  if Code = FConfig.Keys.Right then
-    FConsole.Controller2.SetPowerPadButton(4, Pressed);
+  if FEmulation <> nil then
+    FEmulation.SetKey(Code, Pressed, FConfig.Keys, FConfig.Keys2, FConfig.Keys3, FConfig.Keys4);
 end;
 
 { TFormMain }
@@ -243,45 +259,34 @@ begin
   Caption := 'NESFMX - Open ROM: Ctrl+O';
   Position := TFormPosition.ScreenCenter;
   Fill.Color := TAlphaColors.Black;
-  FConfig := LoadOrCreateConfig(System.IOUtils.TPath.Combine(ExtractFilePath(ParamStr(0)), 'config.ini'));
+  FConfig := LoadOrCreateConfig(TPath.Combine(ExtractFilePath(ParamStr(0)), 'config.ini'));
   ClientWidth := NES_WIDTH * FConfig.Scale;
   ClientHeight := NES_HEIGHT * FConfig.Scale;
-  FInput := TNesInput.Create;
-  FConsole := TNesConsole.Create;
-  FAudio := TNesAudio.Create;
-  FAudioDiagnostics := TAudioDiagnostics.Create;
   ImageCanvas.DisableInterpolation := SameText(FConfig.Filter, 'nearest');
   ImageCanvas.Bitmap.SetSize(NES_WIDTH, NES_HEIGHT);
   ImageCanvas.Bitmap.Clear(TAlphaColors.Black);
+  TimerUpdate.Interval := 8;
 end;
 
 destructor TFormMain.Destroy;
 begin
   if TimerUpdate <> nil then
     TimerUpdate.Enabled := False;
-  FInput.Free;
-  FAudioDiagnostics.Free;
-  FAudio.Free;
-  FConsole.Free;
+  FreeAndNil(FEmulation);
   inherited;
 end;
 
 procedure TFormMain.FormActivate(Sender: TObject);
 begin
-  ResetClock;
-  TimerUpdate.Enabled := FConsole.HasCartridge;
+  TimerUpdate.Enabled := (FEmulation <> nil) and not FEmulationFaulted;
 end;
 
 procedure TFormMain.FormDeactivate(Sender: TObject);
 begin
-  TimerUpdate.Enabled := False;
-  FAudio.Clear;
+  // Keep emulation and audio running, but release keys whose key-up may be lost.
   FillChar(FKeysDown, SizeOf(FKeysDown), 0);
-  FInput.Clear;
-  FInput.Apply(1, FConsole.Controller1);
-  FInput.Apply(2, FConsole.Controller2);
-  for var button := 1 to 12 do
-    FConsole.Controller2.SetPowerPadButton(button, False);
+  if FEmulation <> nil then
+    FEmulation.ClearInput;
 end;
 
 procedure TFormMain.FormKeyDown(Sender: TObject; var Key: Word; var KeyChar: WideChar; Shift: TShiftState);
@@ -299,26 +304,32 @@ begin
       Close
     else if (Code = Ord('O')) and (ssCtrl in Shift) then
       OpenRom
-    else if (Code = Ord('R')) and FConsole.HasCartridge then
+    else if (Code = Ord('R')) and (FEmulation <> nil) then
     begin
-      FAudio.Clear;
-      FConsole.Reset;
-      FAudioDiagnostics.Clear;
-      ResetClock;
+      TimerUpdate.Enabled := False;
+      try
+        FEmulation.RequestReset;
+        FEmulationFaulted := False;
+        TimerUpdate.Enabled := True;
+        Caption := 'NESFMX - ' + ExtractFileName(FRomPath);
+      except
+        StopOnError;
+        raise;
+      end;
     end
-    else if (Code = vkF5) and FConsole.HasCartridge then
+    else if (Code = vkF5) and (FEmulation <> nil) then
     begin
       UpdateFrame;
-      ImageCanvas.Bitmap.SaveToFile(System.IOUtils.TPath.Combine(System.IOUtils.TPath.GetDocumentsPath,
+      ImageCanvas.Bitmap.SaveToFile(TPath.Combine(TPath.GetDocumentsPath,
           'screenshot_' + FormatDateTime('yyyymmdd_hhnnss_zzz', Now) + '.png'));
     end
-    else if (Code = vkF6) and FConsole.HasCartridge then
+    else if (Code = vkF6) and (FEmulation <> nil) then
     begin
-      var DiagnosticPath := System.IOUtils.TPath.Combine(System.IOUtils.TPath.GetDocumentsPath,
+      var DiagnosticPath := TPath.Combine(TPath.GetDocumentsPath,
         'NES-audio-' + FormatDateTime('yyyymmdd_hhnnss_zzz', Now));
       FormDeactivate(Self);
       try
-        FAudioDiagnostics.Save(DiagnosticPath, FRomPath, FAudio.Error);
+        FEmulation.SaveDiagnostics(DiagnosticPath);
         UpdateFrame;
         ImageCanvas.Bitmap.SaveToFile(DiagnosticPath + '.png');
         ShowMessage('Audio diagnostics saved: ' + DiagnosticPath + '.csv');
@@ -357,84 +368,50 @@ begin
     on E: Exception do
       ShowMessage(E.Message);
   end;
-  if FAudio.Error <> '' then
-    ShowMessage('Sound unavailable: ' + FAudio.Error);
 end;
 
 procedure TFormMain.TimerUpdateTimer(Sender: TObject);
 begin
-  var Count: Integer;
-  var Samples: array[0..AUDIO_BLOCK_SAMPLES - 1] of SmallInt;
-  var ClockNow: Int64 := TStopwatch.GetTimeStamp;
-  if ClockNow < FNextFrame then
+  if FEmulationFaulted or not TimerUpdate.Enabled or (FEmulation = nil) then
     Exit;
-  var FramePeriod: Int64 := Round(TStopwatch.Frequency * (NES_FRAME_CYCLES - 0.5) / (3.0 * NES_CPU_HZ));
-  var CatchUp: Integer := 0;
   try
-    repeat
-      FConsole.RunFrame;
-      repeat
-        Count := FConsole.Apu.PopSamples(Samples);
-        if Count > 0 then
-        begin
-          FAudio.Submit(Samples, Count);
-          FAudioDiagnostics.Capture(FConsole, FAudio, Samples, Count);
-        end;
-      until Count = 0;
-      Inc(FFrames);
-      Inc(CatchUp);
-      Inc(FNextFrame, FramePeriod);
-    until (FNextFrame > ClockNow) or (CatchUp = 3);
-    // Avoid a long blocking catch-up after resizing, debugging or a slow frame.
-    if ClockNow - FNextFrame > FramePeriod * 3 then
-      FNextFrame := ClockNow + FramePeriod;
     UpdateFrame;
-    if ClockNow - FFpsStart >= TStopwatch.Frequency then
-    begin
-      Caption := Format('NESFMX - %.1f FPS - %s',
-        [FFrames * TStopwatch.Frequency / (ClockNow - FFpsStart), ExtractFileName(FRomPath)]);
-      if FAudio.Error <> '' then
-        Caption := Caption + ' - sound unavailable';
-      FFrames := 0;
-      FFpsStart := ClockNow;
-    end;
   except
-    TimerUpdate.Enabled := False;
-    FAudio.Clear;
+    StopOnError;
     raise;
   end;
 end;
 
-procedure TFormMain.ResetClock;
+procedure TFormMain.StopOnError;
 begin
-  FNextFrame := TStopwatch.GetTimeStamp;
-  FFpsStart := FNextFrame;
-  FFrames := 0;
+  FEmulationFaulted := True;
+  TimerUpdate.Enabled := False;
+  if FEmulation <> nil then
+    FEmulation.RequestPause;
+  FormDeactivate(Self);
+  Caption := 'NESFMX - Stopped after error - ' + ExtractFileName(FRomPath);
 end;
 
 procedure TFormMain.LoadRom(const FileName: string);
 begin
-  // Load into a fresh console so an invalid ROM cannot invalidate the running game.
-  var NewConsole: TNesConsole := TNesConsole.Create;
-  try
-    NewConsole.LoadRom(FileName);
-    NewConsole.Apu.SetSampleRate(NES_SAMPLE_RATE);
-  except
-    NewConsole.Free;
-    raise;
-  end;
+  // Validate first: an invalid ROM leaves the current worker running.
+  var NewEmulation := TNesEmulationThread.Create(FileName, FConfig.FourScore);
   TimerUpdate.Enabled := False;
-  FAudio.Clear;
-  FAudioDiagnostics.Clear;
-  FConsole.Free;
-  FConsole := NewConsole;
-  FInput.Clear;
+  FreeAndNil(FEmulation); // Join before replacing the session.
+  FEmulation := NewEmulation;
   FillChar(FKeysDown, SizeOf(FKeysDown), 0);
   FRomPath := FileName;
-  Caption := 'NESFMX - ' + ExtractFileName(FRomPath);
-  UpdateFrame;
-  ResetClock;
-  TimerUpdate.Enabled := True;
+  FSoundErrorShown := False;
+  try
+    ImageCanvas.Bitmap.Clear(TAlphaColors.Black);
+    FEmulationFaulted := False;
+    FEmulation.Start;
+    TimerUpdate.Enabled := True;
+    Caption := 'NESFMX - ' + ExtractFileName(FRomPath);
+  except
+    StopOnError;
+    raise;
+  end;
 end;
 
 procedure TFormMain.OpenRom;
@@ -454,12 +431,37 @@ end;
 
 procedure TFormMain.UpdateFrame;
 begin
+  if FEmulation = nil then
+    Exit;
+  var Status: TEmulationStatus;
+  var NewFrame := FEmulation.TakeSnapshot(FDisplayFrame, Status);
+  if (Status.Error <> '') and not FEmulationFaulted then
+  begin
+    StopOnError;
+    raise ENesException.Create(Status.Error);
+  end;
+  if not FEmulationFaulted and (Status.FramesPerSecond > 0) then
+  begin
+    var NewCaption := Format('NESFMX - %.1f FPS - %s',
+      [Status.FramesPerSecond, ExtractFileName(FRomPath)]);
+    if Status.AudioError <> '' then
+      NewCaption := NewCaption + ' - sound unavailable';
+    if Caption <> NewCaption then
+      Caption := NewCaption;
+  end;
+  if (Status.AudioError <> '') and not FSoundErrorShown then
+  begin
+    FSoundErrorShown := True;
+    ShowMessage('Sound unavailable: ' + Status.AudioError);
+  end;
+  if not NewFrame then
+    Exit;
   var Data: TBitmapData;
   if ImageCanvas.Bitmap.Map(TMapAccess.Write, Data) then
   try
     for var y := 0 to NES_HEIGHT - 1 do
       for var x := 0 to NES_WIDTH - 1 do
-        Data.SetPixel(x, y, FConsole.Ppu.Frame[x, y] or $FF000000);
+        Data.SetPixel(x, y, FDisplayFrame[x, y] or $FF000000);
   finally
     ImageCanvas.Bitmap.Unmap(Data);
   end;

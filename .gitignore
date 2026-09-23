@@ -15,3 +15,5 @@ __recovery/
 *.pyc
 /tests/fixtures/*
 /tests/*
+/fmx/Linux64/*
+*.~*

@@ -27,7 +27,18 @@ uses
   NES.Types in '..\source\NES.Types.pas',
   NES.APU in '..\source\NES.APU.pas',
   NES.Audio in '..\source\NES.Audio.pas',
+  NES.Audio.Backend in '..\source\NES.Audio.Backend.pas',
+  NES.Audio.Factory in '..\source\NES.Audio.Factory.pas',
+  NES.Audio.Null in '..\source\NES.Audio.Null.pas',
+  {$IF Defined(MSWINDOWS) and not Defined(NES_AUDIO_NULL)}
+  NES.Audio.Windows in '..\source\NES.Audio.Windows.pas',
+  {$ENDIF}
+  {$IF Defined(LINUX) and not Defined(ANDROID) and not Defined(NES_AUDIO_NULL)}
+  NES.Audio.Alsa in '..\source\NES.Audio.Alsa.pas',
+  NES.Audio.Linux in '..\source\NES.Audio.Linux.pas',
+  {$ENDIF}
   NES.AudioDiagnostics in '..\source\NES.AudioDiagnostics.pas',
+  NES.Emulation in '..\source\NES.Emulation.pas',
   NES.Bus in '..\source\NES.Bus.pas',
   NES.Cartridge in '..\source\NES.Cartridge.pas',
   NES.Console in '..\source\NES.Console.pas',
@@ -46,3 +57,4 @@ begin
   Application.CreateForm(TFormMain, FormMain);
   Application.Run;
 end.
+

@@ -7,61 +7,10 @@ uses
 
 function ResolveLegacyMapper(Declared: Integer; const Prg, Chr: NES.Types.TByteArray): Integer;
 
-function PrepareLegacyRom(Declared: Integer; var Prg: NES.Types.TByteArray;
-  const Chr: NES.Types.TByteArray): string;
-
 implementation
 
 uses
   System.Hash, System.SysUtils;
-
-function PayloadHash(const Prg, Chr: NES.Types.TByteArray): string;
-begin
-  var Hash := THashSHA1.Create;
-  if Length(Prg) > 0 then Hash.Update(Prg[0], Length(Prg));
-  if Length(Chr) > 0 then Hash.Update(Chr[0], Length(Chr));
-  Result := Hash.HashAsString;
-end;
-
-function PrepareLegacyRom(Declared: Integer; var Prg: NES.Types.TByteArray;
-  const Chr: NES.Types.TByteArray): string;
-const
-  DW4_OVERSIZED_SHA1 = 'da46fbf0d3bd89d3b3d3c9ff782b3357e2f6b638';
-  DW4_VERIFIED_SHA1 = '1b3dc265ba0d7e4b2cef9b3f8b0be0847df67c3c';
-begin
-  Result := '';
-  if not (Declared in [1, 3, 4]) then Exit;
-  var Digest := PayloadHash(Prg, Chr);
-  if (Declared = 1) and (Length(Prg) = $100000) and (Length(Chr) = 0) and
-    SameText(Digest, DW4_OVERSIZED_SHA1) then
-  begin
-    var Restored: NES.Types.TByteArray;
-    SetLength(Restored, $80000);
-    // The old dump duplicates A18 differently depending on A12. Select the
-    // original 4-KB pages; no program bytes are synthesized or patched.
-    for var page := 0 to 127 do
-    begin
-      var SourcePage := page;
-      if (page and 1) <> 0 then SourcePage := (page and $3F) or ((page and $40) shl 1);
-      for var offset := 0 to $FFF do Restored[page * $1000 + offset] := Prg[SourcePage * $1000 + offset];
-    end;
-    if not SameText(PayloadHash(Restored, nil), DW4_VERIFIED_SHA1) then
-      raise ENesException.Create('Dragon Warrior IV recovery failed SHA-1 verification');
-    Prg := Restored;
-    Exit('Recovered the legacy 1-MB Dragon Warrior IV dump as verified 512-KB SUROM (SHA-1 '
-      + DW4_VERIFIED_SHA1 + '). Source file unchanged.');
-  end;
-  if (Declared = 4) and SameText(Digest, '91aac682c5f05c4bbab037c6371ac84eb4067d76') then
-    raise ENesException.Create('Damaged ROM dump: Bugs Bunny Birthday Bash prototype (Bugs Bunny 2). '
-      + 'This known bad image contains corrupted program bytes and halts at PC=$60C3. '
-      + 'Use a verified clean dump of the prototype.');
-  if (Declared = 3) and SameText(Digest, '077a47e48770dfd03adc2db7bf1938e35d163b75') then
-    raise ENesException.Create('Damaged ROM dump: Family Fun Fitness Stadium Events. '
-      + 'Corrupted PRG instruction stream reaches KIL/JAM at PC=$8023. Use a verified clean dump.');
-  if (Declared = 3) and SameText(Digest, 'a60752d90c50e3ddd74e9414ab97500286be9c86') then
-    raise ENesException.Create('Damaged ROM dump: TwinBee. '
-      + 'The startup return points to KIL/JAM at PC=$8062 in fixed PRG ROM. Use a verified clean dump.');
-end;
 
 type
   TMapperIdentity = record

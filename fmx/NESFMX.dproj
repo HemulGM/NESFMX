@@ -4,9 +4,8 @@
         <ProjectVersion>20.4</ProjectVersion>
         <FrameworkType>FMX</FrameworkType>
         <Base>True</Base>
-        <Config Condition="'$(Config)'==''">Debug</Config>
-        <Platform Condition="'$(Platform)'==''">Win32</Platform>
-        <ProjectName Condition="'$(ProjectName)'==''">NESFMX</ProjectName>
+        <Config Condition="'$(Config)'==''">Release</Config>
+        <Platform Condition="'$(Platform)'==''">Linux64</Platform>
         <TargetedPlatforms>2790547</TargetedPlatforms>
         <AppType>Application</AppType>
         <MainSource>NESFMX.dpr</MainSource>
@@ -370,7 +369,13 @@
         <DCCReference Include="..\source\NES.Types.pas"/>
         <DCCReference Include="..\source\NES.APU.pas"/>
         <DCCReference Include="..\source\NES.Audio.pas"/>
+        <DCCReference Include="..\source\NES.Audio.Backend.pas"/>
+        <DCCReference Include="..\source\NES.Audio.Factory.pas"/>
+        <DCCReference Include="..\source\NES.Audio.Null.pas"/>
+        <DCCReference Include="..\source\NES.Audio.Windows.pas"/>
+        <DCCReference Include="..\source\NES.Audio.Alsa.pas"/>
         <DCCReference Include="..\source\NES.AudioDiagnostics.pas"/>
+        <DCCReference Include="..\source\NES.Emulation.pas"/>
         <DCCReference Include="..\source\NES.Bus.pas"/>
         <DCCReference Include="..\source\NES.Cartridge.pas"/>
         <DCCReference Include="..\source\NES.Console.pas"/>
@@ -419,6 +424,12 @@
                 </DeployFile>
                 <DeployFile LocalName="$(BDS)\Redist\osx32\libcgunwind.1.0.dylib" Class="DependencyModule">
                     <Platform Name="OSX32">
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="Linux64\Debug\NESFMX" Configuration="Debug" Class="ProjectOutput">
+                    <Platform Name="Linux64">
+                        <RemoteName>NESFMX</RemoteName>
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>

@@ -7,7 +7,7 @@ uses
 
 const
   INPUT_KEYBOARD = 0;
-  INPUT_PLAYER_COUNT = 2;
+  INPUT_PLAYER_COUNT = 4;
 
 type
   TKeyMap = record
@@ -17,8 +17,9 @@ type
   // Each physical device/backend owns a distinct source ID; 0 is the keyboard.
   // Releasing one source never releases a button held by another source.
   TNesInput = class
-  private type
-    TPlayerStates = array[1..INPUT_PLAYER_COUNT] of Byte;
+  private
+    type
+      TPlayerStates = array[1..INPUT_PLAYER_COUNT] of Byte;
   private
     FSources: TDictionary<UInt32, TPlayerStates>;
     procedure CheckPlayer(Player: Integer);
@@ -72,14 +73,22 @@ end;
 procedure TNesInput.SetKey(Player: Integer; Code: UInt32; Pressed: Boolean; const Keys: TKeyMap);
 begin
   CheckPlayer(Player);
-  if Code = Keys.A then SetButton(INPUT_KEYBOARD, Player, nbA, Pressed);
-  if Code = Keys.B then SetButton(INPUT_KEYBOARD, Player, nbB, Pressed);
-  if Code = Keys.Select then SetButton(INPUT_KEYBOARD, Player, nbSelect, Pressed);
-  if Code = Keys.Start then SetButton(INPUT_KEYBOARD, Player, nbStart, Pressed);
-  if Code = Keys.Up then SetButton(INPUT_KEYBOARD, Player, nbUp, Pressed);
-  if Code = Keys.Down then SetButton(INPUT_KEYBOARD, Player, nbDown, Pressed);
-  if Code = Keys.Left then SetButton(INPUT_KEYBOARD, Player, nbLeft, Pressed);
-  if Code = Keys.Right then SetButton(INPUT_KEYBOARD, Player, nbRight, Pressed);
+  if Code = Keys.A then
+    SetButton(INPUT_KEYBOARD, Player, nbA, Pressed);
+  if Code = Keys.B then
+    SetButton(INPUT_KEYBOARD, Player, nbB, Pressed);
+  if Code = Keys.Select then
+    SetButton(INPUT_KEYBOARD, Player, nbSelect, Pressed);
+  if Code = Keys.Start then
+    SetButton(INPUT_KEYBOARD, Player, nbStart, Pressed);
+  if Code = Keys.Up then
+    SetButton(INPUT_KEYBOARD, Player, nbUp, Pressed);
+  if Code = Keys.Down then
+    SetButton(INPUT_KEYBOARD, Player, nbDown, Pressed);
+  if Code = Keys.Left then
+    SetButton(INPUT_KEYBOARD, Player, nbLeft, Pressed);
+  if Code = Keys.Right then
+    SetButton(INPUT_KEYBOARD, Player, nbRight, Pressed);
 end;
 
 procedure TNesInput.ReleaseSource(Source: UInt32);
@@ -109,3 +118,4 @@ begin
 end;
 
 end.
+
