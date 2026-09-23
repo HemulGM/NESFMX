@@ -17,3 +17,4 @@ __recovery/
 /tests/*
 /fmx/Linux64/*
 *.~*
+/fmx/Win64/*
