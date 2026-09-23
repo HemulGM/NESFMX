@@ -98,8 +98,6 @@ const
   WAVE_FORMAT_ID: AnsiString = 'WAVEfmt ';
   DATA_CHUNK_ID: AnsiString = 'data';
 begin
-  var ChunkSize: Cardinal;
-  var HeaderWord: Word;
   var FirstFrameIndex: Integer := (FNext - FCount + Length(FFrames)) mod Length(FFrames);
   var TotalSamples: Cardinal := 0;
   for var i := 0 to FCount - 1 do
@@ -119,6 +117,8 @@ begin
   try
     var Wave: TFileStream := TFileStream.Create(Prefix + '.wav', fmCreate);
     try
+      var ChunkSize: Cardinal;
+      var HeaderWord: Word;
       Wave.WriteBuffer(RIFF_CHUNK_ID[1], 4);
       ChunkSize := 36 + TotalSamples * 2;
       Wave.WriteBuffer(ChunkSize, 4);

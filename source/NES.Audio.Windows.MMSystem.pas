@@ -1,4 +1,4 @@
-unit NES.Audio.Windows;
+unit NES.Audio.Windows.MMSystem;
 
 interface
 
@@ -19,6 +19,7 @@ type
   public
     constructor Create;
     destructor Destroy; override;
+  public { INesAudioBackend }
     procedure Clear;
     procedure Submit(const Samples: array of SmallInt; Count: Integer);
     function QueueState: TAudioQueueState;
@@ -34,9 +35,8 @@ end;
 
 constructor TNesWindowsAudioBackend.Create;
 begin
-  var Format: TWaveFormatEx;
-  var ErrorText: array[0..255] of Char;
   inherited Create;
+  var Format: TWaveFormatEx;
   FillChar(Format, SizeOf(Format), 0);
   Format.wFormatTag := WAVE_FORMAT_PCM;
   Format.nChannels := 1;
@@ -57,6 +57,7 @@ begin
     end;
   if Code <> MMSYSERR_NOERROR then
   begin
+    var ErrorText: array[0..255] of Char;
     waveOutGetErrorText(Code, ErrorText, Length(ErrorText));
     FError := string(ErrorText);
     Close;
@@ -80,7 +81,6 @@ end;
 
 function TNesWindowsAudioBackend.QueueState: TAudioQueueState;
 begin
-  var Position: TMMTime;
   Result := Default(TAudioQueueState);
   Result.SubmittedSamples := FSubmittedSamples;
   Result.DroppedSamples := FDroppedSamples;
@@ -91,6 +91,7 @@ begin
       Inc(Result.QueuedBlocks);
   if FDevice = 0 then
     Exit;
+  var Position: TMMTime;
   FillChar(Position, SizeOf(Position), 0);
   Position.wType := TIME_SAMPLES;
   if waveOutGetPosition(FDevice, @Position, SizeOf(Position)) = MMSYSERR_NOERROR then

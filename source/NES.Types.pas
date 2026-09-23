@@ -5,7 +5,13 @@ interface
 uses
   System.SysUtils;
 
+{$SCOPEDENUMS ON}
+
 type
+  TNesRegion = (NTSC, PAL);
+
+  TRegionOverride = (Auto, NTSC, PAL);
+
   TByteArray = array of UInt8;
 
   TPalette32 = array[0..63] of UInt32;

@@ -3,7 +3,7 @@ unit NES.Mapper.Mmc1;
 interface
 
 uses
-  NES.Types, NES.Mapper;
+  NES.State, NES.Types, NES.Mapper;
 
 type
   TMapperMmc1 = class(TMapper)
@@ -26,6 +26,9 @@ type
     function MapPrgBank(Bank: Integer): Integer;
     function MapChrBank4K(Bank: Integer): Integer;
   public
+    procedure SerializeState(State: TNesStateArchive); override;
+    function GetSaveMemory: TByteArray; override;
+    procedure SetSaveMemory(const Data: TByteArray); override;
     constructor Create(const APrgRom, AChrData: TByteArray; AHasChrRam: Boolean; AMirrorMode: TMirrorMode);
     function CpuRead(Address: UInt16; out Value: UInt8): Boolean; override;
     function CpuWrite(Address: UInt16; Value: UInt8): Boolean; override;
@@ -37,6 +40,37 @@ type
   end;
 
 implementation
+
+procedure TMapperMmc1.SerializeState(State: TNesStateArchive);
+begin
+  inherited;
+  if Length(FChrMemory) > 0 then
+    State.Field(FChrMemory[0], Length(FChrMemory) * SizeOf(FChrMemory[0]));
+  State.Field(FPrgRam, SizeOf(FPrgRam));
+  State.Field(FHasChrRam, SizeOf(FHasChrRam));
+  State.Field(FBoardMirrorMode, SizeOf(FBoardMirrorMode));
+  State.Field(FShiftRegister, SizeOf(FShiftRegister));
+  State.Field(FWriteCount, SizeOf(FWriteCount));
+  State.Field(FControl, SizeOf(FControl));
+  State.Field(FChrBank0, SizeOf(FChrBank0));
+  State.Field(FChrBank1, SizeOf(FChrBank1));
+  State.Field(FPrgBank, SizeOf(FPrgBank));
+  State.Field(FLastWriteCycle, SizeOf(FLastWriteCycle));
+  State.Field(FHasLastWrite, SizeOf(FHasLastWrite));
+end;
+
+function TMapperMmc1.GetSaveMemory: TByteArray;
+begin
+  SetLength(Result, SizeOf(FPrgRam));
+  Move(FPrgRam[0], Result[0], Length(Result));
+end;
+
+procedure TMapperMmc1.SetSaveMemory(const Data: TByteArray);
+begin
+  if Length(Data) <> SizeOf(FPrgRam) then
+    raise ENesException.Create('Invalid cartridge save size');
+  Move(Data[0], FPrgRam[0], Length(Data));
+end;
 
 constructor TMapperMmc1.Create(const APrgRom, AChrData: TByteArray; AHasChrRam: Boolean; AMirrorMode: TMirrorMode);
 begin
@@ -116,11 +150,10 @@ begin
     begin
       if Address < $C000 then
         Bank16K := MapPrgBank(OuterBank or (FPrgBank and $0F))
+      else if FHasChrRam and (GetPrgBankCount > 16) then
+        Bank16K := MapPrgBank(OuterBank or $0F)
       else
-        if FHasChrRam and (GetPrgBankCount > 16) then
-          Bank16K := MapPrgBank(OuterBank or $0F)
-        else
-          Bank16K := GetPrgBankCount - 1;
+        Bank16K := GetPrgBankCount - 1;
       Offset := Bank16K * $4000 + (Address and $3FFF);
     end;
   end;
@@ -236,25 +269,23 @@ end;
 
 function TMapperMmc1.GetMirrorMode: TMirrorMode;
 begin
-  if FBoardMirrorMode = mmFourScreen then
-    Exit(mmFourScreen);
+  if FBoardMirrorMode = TMirrorMode.FourScreen then
+    Exit(TMirrorMode.FourScreen);
 
   case FControl and 3 of
     0:
-      Result := mmSingle0;
+      Result := TMirrorMode.Single0;
     1:
-      Result := mmSingle1;
+      Result := TMirrorMode.Single1;
     2:
-      Result := mmVertical;
+      Result := TMirrorMode.Vertical;
   else
-    Result := mmHorizontal;
+    Result := TMirrorMode.Horizontal;
   end;
 end;
 
 procedure TMapperMmc1.Reset;
 begin
-  for var i := Low(FPrgRam) to High(FPrgRam) do
-    FPrgRam[i] := 0;
   FShiftRegister := $10;
   FWriteCount := 0;
   FControl := $0C;

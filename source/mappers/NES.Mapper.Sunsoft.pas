@@ -1,9 +1,9 @@
-﻿unit NES.Mapper.Sunsoft;
+unit NES.Mapper.Sunsoft;
 
 interface
 
 uses
-  NES.Types, NES.Mapper, NES.Mapper.Banked;
+  NES.State, NES.Types, NES.Mapper, NES.Mapper.Banked;
 
 type
   TMapperSunsoft = class(TMapperBanked)
@@ -14,6 +14,7 @@ type
     FUseChrNametables, FCountEnabled, FIrqEnabled, FPending: Boolean;
     function NameOffset(Address: UInt16): Integer;
   public
+    procedure SerializeState(State: TNesStateArchive); override;
     constructor Create(Board: Integer; const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode);
     procedure Reset; override;
     procedure ClockCpu; override;
@@ -25,6 +26,20 @@ type
   end;
 
 implementation
+
+procedure TMapperSunsoft.SerializeState(State: TNesStateArchive);
+begin
+  inherited;
+  State.Field(FBoard, SizeOf(FBoard));
+  State.Field(FCounter, SizeOf(FCounter));
+  State.Field(FSelect, SizeOf(FSelect));
+  State.Field(FWorkBank, SizeOf(FWorkBank));
+  State.Field(FNametableBanks, SizeOf(FNametableBanks));
+  State.Field(FUseChrNametables, SizeOf(FUseChrNametables));
+  State.Field(FCountEnabled, SizeOf(FCountEnabled));
+  State.Field(FIrqEnabled, SizeOf(FIrqEnabled));
+  State.Field(FPending, SizeOf(FPending));
+end;
 
 constructor TMapperSunsoft.Create(Board: Integer; const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode);
 begin
@@ -135,13 +150,13 @@ function TMapperSunsoft.NameOffset(Address: UInt16): Integer;
 begin
   var Slot := ((Address - $2000) shr 10) and 3;
   case FMirror of
-    mmVertical:
+    TMirrorMode.Vertical:
       Slot := Slot and 1;
-    mmHorizontal:
+    TMirrorMode.Horizontal:
       Slot := Slot shr 1;
-    mmSingle0:
+    TMirrorMode.Single0:
       Slot := 0;
-    mmSingle1:
+    TMirrorMode.Single1:
       Slot := 1;
   else
     Slot := Slot and 1;

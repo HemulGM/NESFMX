@@ -1,9 +1,9 @@
-﻿unit NES.Mapper.Cony;
+unit NES.Mapper.Cony;
 
 interface
 
 uses
-  NES.Types, NES.Mapper, NES.Mapper.Banked;
+  NES.State, NES.Types, NES.Mapper, NES.Mapper.Banked;
 
 type
   TMapperCony = class(TMapperBanked)
@@ -15,6 +15,7 @@ type
     FEnabled, FPending, FTwoK, FOneK: Boolean;
     procedure UpdateBanks;
   public
+    procedure SerializeState(State: TNesStateArchive); override;
     constructor Create(const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode);
     procedure Reset; override;
     procedure ClockCpu; override;
@@ -24,6 +25,20 @@ type
   end;
 
 implementation
+
+procedure TMapperCony.SerializeState(State: TNesStateArchive);
+begin
+  inherited;
+  State.Field(FRegisters, SizeOf(FRegisters));
+  State.Field(FExpansion, SizeOf(FExpansion));
+  State.Field(FMode, SizeOf(FMode));
+  State.Field(FBank, SizeOf(FBank));
+  State.Field(FCounter, SizeOf(FCounter));
+  State.Field(FEnabled, SizeOf(FEnabled));
+  State.Field(FPending, SizeOf(FPending));
+  State.Field(FTwoK, SizeOf(FTwoK));
+  State.Field(FOneK, SizeOf(FOneK));
+end;
 
 constructor TMapperCony.Create(const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode);
 begin

@@ -3,11 +3,13 @@ unit NES.PPU;
 interface
 
 uses
-  NES.Types, NES.Consts, NES.Mapper;
+  NES.State, NES.Types, NES.Consts, NES.Mapper;
 
 type
   TPpu = class
   private
+    FRegion: TNesRegion;
+    FPreRenderLine: Integer;
     FMapper: TMapper;
     FNameTable: array[0..4095] of UInt8;
     FPaletteRam: array[0..31] of UInt8;
@@ -66,7 +68,10 @@ type
     function SampleSpritePixel(X, Y: Integer; out PaletteIndex: UInt8; out PriorityBehindBg: Boolean; out IsSpriteZero: Boolean): UInt8;
     procedure RenderScanline;
   public
+    procedure SerializeState(State: TNesStateArchive);
     constructor Create;
+    // Select timing before running; resets PPU state.
+    procedure SetRegion(Value: TNesRegion);
     procedure ConnectMapper(AMapper: TMapper);
     procedure Reset;
     procedure Clock;
@@ -96,9 +101,67 @@ type
 
 implementation
 
+procedure TPpu.SerializeState(State: TNesStateArchive);
+begin
+  State.Field(FRegion, SizeOf(FRegion));
+  State.Field(FPreRenderLine, SizeOf(FPreRenderLine));
+  State.Field(FNameTable, SizeOf(FNameTable));
+  State.Field(FPaletteRam, SizeOf(FPaletteRam));
+  State.Field(FOam, SizeOf(FOam));
+  State.Field(FLineSprites, SizeOf(FLineSprites));
+  State.Field(FLineSpriteCount, SizeOf(FLineSpriteCount));
+  State.Field(FFrame, SizeOf(FFrame));
+  State.Field(FDrawingFrame, SizeOf(FDrawingFrame));
+  State.Field(FRenderingLine, SizeOf(FRenderingLine));
+  State.Field(FCycle, SizeOf(FCycle));
+  State.Field(FScanline, SizeOf(FScanline));
+  State.Field(FFrameReady, SizeOf(FFrameReady));
+  State.Field(FFrameOdd, SizeOf(FFrameOdd));
+  State.Field(FCtrl, SizeOf(FCtrl));
+  State.Field(FMask, SizeOf(FMask));
+  State.Field(FStatus, SizeOf(FStatus));
+  State.Field(FOamAddress, SizeOf(FOamAddress));
+  State.Field(FAddrLatch, SizeOf(FAddrLatch));
+  State.Field(FFineX, SizeOf(FFineX));
+  State.Field(FV, SizeOf(FV));
+  State.Field(FT, SizeOf(FT));
+  State.Field(FDataBuffer, SizeOf(FDataBuffer));
+  State.Field(FOpenBus, SizeOf(FOpenBus));
+  State.Field(FNmiOccurred, SizeOf(FNmiOccurred));
+  State.Field(FNmiPending, SizeOf(FNmiPending));
+  State.Field(FNmiDelay, SizeOf(FNmiDelay));
+  State.Field(FNmiLine, SizeOf(FNmiLine));
+  State.Field(FVblSetSuppressed, SizeOf(FVblSetSuppressed));
+  State.Field(FOddFrameSkipEnabled, SizeOf(FOddFrameSkipEnabled));
+  State.Field(FRenderV, SizeOf(FRenderV));
+  State.Field(FRenderCtrl, SizeOf(FRenderCtrl));
+  State.Field(FRenderMask, SizeOf(FRenderMask));
+  State.Field(FRenderFineX, SizeOf(FRenderFineX));
+  State.Field(FSplitActive, SizeOf(FSplitActive));
+  State.Field(FSplitY, SizeOf(FSplitY));
+  State.Field(FSplitV, SizeOf(FSplitV));
+  State.Field(FSplitCtrl, SizeOf(FSplitCtrl));
+  State.Field(FSplitFineX, SizeOf(FSplitFineX));
+  State.Field(FSplitMask, SizeOf(FSplitMask));
+  State.Field(FSprite0HitX, SizeOf(FSprite0HitX));
+  State.Field(FSprite0HitY, SizeOf(FSprite0HitY));
+  State.Field(FPpuClock, SizeOf(FPpuClock));
+  State.Field(FFetchTile, SizeOf(FFetchTile));
+end;
+
 constructor TPpu.Create;
 begin
   inherited Create;
+  SetRegion(TNesRegion.NTSC);
+end;
+
+procedure TPpu.SetRegion(Value: TNesRegion);
+begin
+  FRegion := Value;
+  if Value = TNesRegion.PAL then
+    FPreRenderLine := 311
+  else
+    FPreRenderLine := 261;
   Reset;
 end;
 
@@ -112,7 +175,7 @@ begin
   FCycle := 0;
   FPpuClock := 0;
   FFetchTile := 0;
-  FScanline := 261;
+  FScanline := FPreRenderLine;
   FFrameReady := False;
   FFrameOdd := False;
   FCtrl := 0;
@@ -205,25 +268,25 @@ begin
     Exit(Index and $07FF);
 
   case FMapper.GetMirrorMode of
-    mmVertical:
+    TMirrorMode.Vertical:
       case TableIndex of
         0, 2:
           Result := Index and $03FF;
       else
         Result := $0400 + (Index and $03FF);
       end;
-    mmHorizontal:
+    TMirrorMode.Horizontal:
       case TableIndex of
         0, 1:
           Result := Index and $03FF;
       else
         Result := $0400 + (Index and $03FF);
       end;
-    mmSingle0:
+    TMirrorMode.Single0:
       Result := Index and $03FF;
-    mmSingle1:
+    TMirrorMode.Single1:
       Result := $0400 + (Index and $03FF);
-    mmFourScreen:
+    TMirrorMode.FourScreen:
       Result := Index;
   else
     Result := Index and $07FF;
@@ -342,13 +405,6 @@ end;
 
 procedure TPpu.ClockMapperAddress;
 begin
-  var Slot: Integer;
-  var Count: Integer;
-  var NextLine: Integer;
-  var Row: Integer;
-  var Height: Integer;
-  var Tile: UInt8;
-  var Attributes: UInt8;
   if FMapper = nil then
     Exit;
   if (FMask and $18) = 0 then
@@ -356,7 +412,7 @@ begin
     FMapper.ClockPpuAddress(FV and $3FFF, FPpuClock);
     Exit;
   end;
-  if (FScanline >= 240) and (FScanline <> 261) then
+  if (FScanline >= 240) and (FScanline <> FPreRenderLine) then
     Exit;
   // Expose only timed PPU fetches; frame/debug reads must not clock IRQs.
   var Phase: Integer := FCycle and 7;
@@ -372,19 +428,21 @@ begin
   end
   else if (FCycle >= 256) and (FCycle < 320) and (Phase >= 4) then
   begin
-    Slot := (FCycle - 256) div 8;
-    if FScanline = 261 then
+    var Slot: Integer := (FCycle - 256) div 8;
+    var NextLine: Integer;
+    if FScanline = FPreRenderLine then
       NextLine := 0
     else
       NextLine := FScanline + 1;
+    var Height: Integer;
     if (FCtrl and $20) <> 0 then
       Height := 16
     else
       Height := 8;
-    Count := 0;
-    Tile := $FF;
-    Attributes := 0;
-    Row := 0;
+    var Count: Integer := 0;
+    var Tile: UInt8 := $FF;
+    var Attributes: UInt8 := 0;
+    var Row: Integer := 0;
     for var i := 0 to 63 do
       if (NextLine > FOam[i * 4]) and (NextLine <= Integer(FOam[i * 4]) + Height) then
       begin
@@ -434,7 +492,7 @@ begin
 
   if RenderingEnabled then
   begin
-    if (((FScanline >= 0) and (FScanline < 240)) or (FScanline = 261)) then
+    if (((FScanline >= 0) and (FScanline < 240)) or (FScanline = FPreRenderLine)) then
     begin
       if (((FCycle >= 1) and (FCycle <= 256)) or ((FCycle >= 321) and (FCycle <= 336))) and (((FCycle - 1) mod 8) = 7) then
         IncrementX;
@@ -442,9 +500,9 @@ begin
         IncrementY;
       if FCycle = 257 then
         CopyX;
-      if (FScanline = 261) and (FCycle = 339) then
+      if (FScanline = FPreRenderLine) and (FCycle = 339) then
         FOddFrameSkipEnabled := RenderingEnabled;
-      if (FScanline = 261) and (FCycle >= 280) and (FCycle <= 304) then
+      if (FScanline = FPreRenderLine) and (FCycle >= 280) and (FCycle <= 304) then
         CopyY;
     end;
   end;
@@ -452,7 +510,7 @@ begin
   if (FScanline = 241) and (FCycle = 1) then
     SetVblank(True);
 
-  if (FScanline = 261) and (FCycle = 1) then
+  if (FScanline = FPreRenderLine) and (FCycle = 1) then
   begin
     FVblSetSuppressed := False;
     FOddFrameSkipEnabled := False;
@@ -462,7 +520,7 @@ begin
     FFrameReady := False;
   end;
 
-  if FOddFrameSkipEnabled and FFrameOdd and (FScanline = 261) and (FCycle = 339) then
+  if (FRegion = TNesRegion.NTSC) and FOddFrameSkipEnabled and FFrameOdd and (FScanline = FPreRenderLine) and (FCycle = 339) then
     FCycle := 340;
 
   Inc(FCycle);
@@ -471,7 +529,7 @@ begin
   begin
     FCycle := 0;
     Inc(FScanline);
-    if FScanline > 261 then
+    if FScanline > FPreRenderLine then
     begin
       FScanline := 0;
       FFrameReady := True;
@@ -538,17 +596,16 @@ end;
 
 procedure TPpu.CpuWrite(Address: UInt16; Value: UInt8);
 begin
-  var OldCtrl: UInt8;
   FOpenBus := Value;
   case Address and 7 of
     0:
       begin
-        OldCtrl := FCtrl;
+        var OldCtrl: UInt8 := FCtrl;
         FCtrl := Value;
         if FMapper <> nil then
           FMapper.SetPpuControl(Value);
         FT := (FT and $F3FF) or (UInt16(Value and 3) shl 10);
-        if ((OldCtrl and $80) = 0) and ((FCtrl and $80) <> 0) and FNmiOccurred and not ((FScanline = 261) and (FCycle <= 1)) then
+        if ((OldCtrl and $80) = 0) and ((FCtrl and $80) <> 0) and FNmiOccurred and not ((FScanline = FPreRenderLine) and (FCycle <= 1)) then
         begin
           FNmiLine := True;
           FNmiDelay := 0;
@@ -630,7 +687,6 @@ function TPpu.SampleBackgroundPixel(X, Y: Integer; out PaletteIndex: UInt8): UIn
 begin
   if FMapper <> nil then
     FMapper.SetPpuFetchKind(False, X, Y);
-  var WorldY: Integer;
   var RenderV: UInt16 := FRenderV;
   var RenderCtrl: UInt8 := FRenderCtrl;
   var RenderMask: UInt8 := FRenderMask;
@@ -667,6 +723,7 @@ begin
   var BaseNameTable: Integer := (RenderV shr 10) and 3;
 
   var WorldX: Integer := (X + ScrollX) mod 512;
+  var WorldY: Integer;
   if FRenderingLine then
     WorldY := ScrollY mod 480
   else

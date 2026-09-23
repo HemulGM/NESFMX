@@ -56,14 +56,12 @@ begin
 end;
 
 procedure TNesInput.SetButton(Source: UInt32; Player: Integer; Button: TNesButton; Pressed: Boolean);
-var
-  States: TPlayerStates;
-  Mask: Byte;
 begin
   CheckPlayer(Player);
+  var States: TPlayerStates;
   if not FSources.TryGetValue(Source, States) then
     FillChar(States, SizeOf(States), 0);
-  Mask := 1 shl Ord(Button);
+  var Mask: Byte := 1 shl Ord(Button);
   if Pressed then
     States[Player] := States[Player] or Mask
   else
@@ -75,21 +73,21 @@ procedure TNesInput.SetKey(Player: Integer; Code: UInt32; Pressed: Boolean; cons
 begin
   CheckPlayer(Player);
   if Code = Keys.A then
-    SetButton(INPUT_KEYBOARD, Player, nbA, Pressed);
+    SetButton(INPUT_KEYBOARD, Player, TNesButton.A, Pressed);
   if Code = Keys.B then
-    SetButton(INPUT_KEYBOARD, Player, nbB, Pressed);
+    SetButton(INPUT_KEYBOARD, Player, TNesButton.B, Pressed);
   if Code = Keys.Select then
-    SetButton(INPUT_KEYBOARD, Player, nbSelect, Pressed);
+    SetButton(INPUT_KEYBOARD, Player, TNesButton.Select, Pressed);
   if Code = Keys.Start then
-    SetButton(INPUT_KEYBOARD, Player, nbStart, Pressed);
+    SetButton(INPUT_KEYBOARD, Player, TNesButton.Start, Pressed);
   if Code = Keys.Up then
-    SetButton(INPUT_KEYBOARD, Player, nbUp, Pressed);
+    SetButton(INPUT_KEYBOARD, Player, TNesButton.Up, Pressed);
   if Code = Keys.Down then
-    SetButton(INPUT_KEYBOARD, Player, nbDown, Pressed);
+    SetButton(INPUT_KEYBOARD, Player, TNesButton.Down, Pressed);
   if Code = Keys.Left then
-    SetButton(INPUT_KEYBOARD, Player, nbLeft, Pressed);
+    SetButton(INPUT_KEYBOARD, Player, TNesButton.Left, Pressed);
   if Code = Keys.Right then
-    SetButton(INPUT_KEYBOARD, Player, nbRight, Pressed);
+    SetButton(INPUT_KEYBOARD, Player, TNesButton.Right, Pressed);
 end;
 
 procedure TNesInput.ReleaseSource(Source: UInt32);

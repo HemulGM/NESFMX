@@ -3,7 +3,7 @@ unit NES.CPU;
 interface
 
 uses
-  NES.Types;
+  NES.State, NES.Types;
 
 const
   FLAG_CARRY = $01;
@@ -97,6 +97,7 @@ type
     P: UInt8;
     CyclesRemaining: Integer;
     TotalCycles: UInt32;
+    procedure SerializeState(State: TNesStateArchive);
     constructor Create;
     procedure Connect(Reader: TCpuReadFunc; Writer: TCpuWriteProc);
     procedure Reset;
@@ -114,6 +115,41 @@ type
   end;
 
 implementation
+
+procedure TCpu6502.SerializeState(State: TNesStateArchive);
+begin
+  State.Field(FPendingNmi, SizeOf(FPendingNmi));
+  State.Field(FPendingIrq, SizeOf(FPendingIrq));
+  State.Field(FNmiAfterInstruction, SizeOf(FNmiAfterInstruction));
+  State.Field(FIrqAfterInstruction, SizeOf(FIrqAfterInstruction));
+  State.Field(FUnknownOpcodeCount, SizeOf(FUnknownOpcodeCount));
+  State.Field(FJammed, SizeOf(FJammed));
+  State.Field(FJamOpcode, SizeOf(FJamOpcode));
+  State.Field(FJamPc, SizeOf(FJamPc));
+  State.Field(FInterruptSequenceActive, SizeOf(FInterruptSequenceActive));
+  State.Field(FInterruptKind, SizeOf(FInterruptKind));
+  State.Field(FInterruptBreakFlag, SizeOf(FInterruptBreakFlag));
+  State.Field(FInterruptLatchedPc, SizeOf(FInterruptLatchedPc));
+  State.Field(FInterruptLatchedP, SizeOf(FInterruptLatchedP));
+  State.Field(FInterruptVectorLow, SizeOf(FInterruptVectorLow));
+  State.Field(FPollInterruptDisable, SizeOf(FPollInterruptDisable));
+  State.Field(FInstructionActive, SizeOf(FInstructionActive));
+  State.Field(FPollCycle, SizeOf(FPollCycle));
+  State.Field(FExecutingOpcode, SizeOf(FExecutingOpcode));
+  State.Field(FQueuedWriteCount, SizeOf(FQueuedWriteCount));
+  State.Field(FWriteAddresses, SizeOf(FWriteAddresses));
+  State.Field(FWriteValues, SizeOf(FWriteValues));
+  State.Field(FLastUnknownOpcode, SizeOf(FLastUnknownOpcode));
+  State.Field(FLastUnknownPc, SizeOf(FLastUnknownPc));
+  State.Field(A, SizeOf(A));
+  State.Field(X, SizeOf(X));
+  State.Field(Y, SizeOf(Y));
+  State.Field(Sp, SizeOf(Sp));
+  State.Field(Pc, SizeOf(Pc));
+  State.Field(P, SizeOf(P));
+  State.Field(CyclesRemaining, SizeOf(CyclesRemaining));
+  State.Field(TotalCycles, SizeOf(TotalCycles));
+end;
 
 constructor TCpu6502.Create;
 begin
@@ -441,13 +477,13 @@ end;
 
 procedure TCpu6502.ClockInterrupt;
 begin
-  var Vector: UInt16;
   // NMI may hijack IRQ/BRK until vector selection, without changing stacked B.
   if (CyclesRemaining >= 3) and (FInterruptKind <> ikNmi) and FPendingNmi then
   begin
     FInterruptKind := ikNmi;
     FPendingNmi := False;
   end;
+  var Vector: UInt16;
   if FInterruptKind = ikNmi then
     Vector := $FFFA
   else

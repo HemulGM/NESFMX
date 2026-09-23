@@ -1,9 +1,9 @@
-﻿unit NES.Mapper.Banked;
+unit NES.Mapper.Banked;
 
 interface
 
 uses
-  NES.Types, NES.Mapper;
+  NES.State, NES.Types, NES.Mapper;
 
 type
   TMapperBanked = class(TMapper)
@@ -24,6 +24,9 @@ type
     function PrgOffset(Address: UInt16): Integer;
     function ChrOffset(Address: UInt16): Integer;
   public
+    procedure SerializeState(State: TNesStateArchive); override;
+    function GetSaveMemory: TByteArray; override;
+    procedure SetSaveMemory(const Data: TByteArray); override;
     constructor Create(const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode);
     function CpuRead(Address: UInt16; out Value: UInt8): Boolean; override;
     function CpuWrite(Address: UInt16; Value: UInt8): Boolean; override;
@@ -34,6 +37,35 @@ type
   end;
 
 implementation
+
+procedure TMapperBanked.SerializeState(State: TNesStateArchive);
+begin
+  inherited;
+  if Length(FChrMemory) > 0 then
+    State.Field(FChrMemory[0], Length(FChrMemory) * SizeOf(FChrMemory[0]));
+  if Length(FPrgRam) > 0 then
+    State.Field(FPrgRam[0], Length(FPrgRam) * SizeOf(FPrgRam[0]));
+  State.Field(FPrgBanks, SizeOf(FPrgBanks));
+  State.Field(FChrBanks, SizeOf(FChrBanks));
+  State.Field(FHasChrRam, SizeOf(FHasChrRam));
+  State.Field(FRamEnabled, SizeOf(FRamEnabled));
+  State.Field(FRamWritable, SizeOf(FRamWritable));
+  State.Field(FInitialMirror, SizeOf(FInitialMirror));
+  State.Field(FMirror, SizeOf(FMirror));
+end;
+
+function TMapperBanked.GetSaveMemory: TByteArray;
+begin
+  SetLength(Result, Length(FPrgRam));
+  Move(FPrgRam[0], Result[0], Length(Result));
+end;
+
+procedure TMapperBanked.SetSaveMemory(const Data: TByteArray);
+begin
+  if Length(Data) <> Length(FPrgRam) then
+    raise ENesException.Create('Invalid cartridge save size');
+  Move(Data[0], FPrgRam[0], Length(Data));
+end;
 
 constructor TMapperBanked.Create(const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode);
 begin
@@ -99,13 +131,13 @@ procedure TMapperBanked.Mirror(Value: Integer);
 begin
   case Value and 3 of
     0:
-      FMirror := mmVertical;
+      FMirror := TMirrorMode.Vertical;
     1:
-      FMirror := mmHorizontal;
+      FMirror := TMirrorMode.Horizontal;
     2:
-      FMirror := mmSingle0;
+      FMirror := TMirrorMode.Single0;
     3:
-      FMirror := mmSingle1;
+      FMirror := TMirrorMode.Single1;
   end;
 end;
 

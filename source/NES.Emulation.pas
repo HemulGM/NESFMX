@@ -8,6 +8,7 @@ uses
 
 type
   TEmulationStatus = record
+    Region: TNesRegion;
     FrameNumber: UInt64;
     FramesPerSecond: Double;
     AudioQueue: TAudioQueueState;
@@ -25,19 +26,28 @@ type
     FLock: TCriticalSection;
     FWake: TEvent;
     FRomPath: string;
+    FSaveDirectory: string;
+    FSnapshotDirectory: string;
+    FSnapshotLock: TCriticalSection;
+    FSnapshotDone: TEvent;
+    FSnapshotPending, FSnapshotLoading: Boolean;
+    FSnapshotName, FSnapshotError: string;
     FPowerPad: array[1..4] of Boolean;
     FResetRequested, FPauseRequested, FResumeRequested: Boolean;
     FFrame: TFrameBuffer;
     FFramePending: Boolean;
     FStatus: TEmulationStatus;
     procedure RunEmulation;
+    procedure SnapshotCommand(const Name: string; Loading: Boolean);
+    function ProcessSnapshot: Boolean;
   protected
     procedure Execute; override;
     procedure TerminatedSet; override;
   public
     // Validates the ROM before replacing the current session. Call Start once.
-    constructor Create(const FileName: string; FourScoreEnabled: Boolean = False);
+    constructor Create(const FileName: string; FourScoreEnabled: Boolean = False; RegionOverride: TRegionOverride = TRegionOverride.Auto; const SaveDirectory: string = '');
     destructor Destroy; override;
+    procedure StopAndSave;
     procedure SetKey(Code: UInt32; Pressed: Boolean; const Keys, Keys2: TKeyMap); overload;
     procedure SetKey(Code: UInt32; Pressed: Boolean; const Keys, Keys2, Keys3, Keys4: TKeyMap); overload;
     procedure ClearInput;
@@ -47,25 +57,49 @@ type
     procedure RequestResume;
     function TakeSnapshot(var Frame: TFrameBuffer; out Status: TEmulationStatus): Boolean;
     procedure SaveDiagnostics(const Prefix: string);
+    // Synchronous commands executed by the worker at a frame boundary.
+    procedure SaveSnapshot(const Name: string);
+    procedure LoadSnapshot(const Name: string);
+    property SnapshotDirectory: string read FSnapshotDirectory;
   end;
 
 implementation
 
 uses
-  System.Diagnostics, System.Math, NES.Consts;
+  System.Diagnostics, System.Math, System.IOUtils, NES.Consts, NES.SavePaths;
 
-constructor TNesEmulationThread.Create(const FileName: string; FourScoreEnabled: Boolean);
+constructor TNesEmulationThread.Create(const FileName: string; FourScoreEnabled: Boolean; RegionOverride: TRegionOverride; const SaveDirectory: string);
 begin
   inherited Create(True);
   FreeOnTerminate := False;
   FLock := TCriticalSection.Create;
+  FSnapshotLock := TCriticalSection.Create;
+  FSnapshotDone := TEvent.Create(nil, True, False, '');
   FWake := TEvent.Create(nil, False, False, '');
   FInput := TNesInput.Create;
   FDiagnostics := TAudioDiagnostics.Create;
   FRomPath := FileName;
+  FSaveDirectory := SaveDirectory;
+  if FSaveDirectory = '' then
+    FSaveDirectory := TPath.Combine(TPath.Combine(TPath.GetDocumentsPath, 'NESFMX'), 'Saves');
   FConsole := TNesConsole.Create(FourScoreEnabled);
-  FConsole.LoadRom(FileName);
+  FConsole.LoadRom(FileName, RegionOverride);
+  FSnapshotDirectory := ResolveGameSavePath(TPath.Combine(
+      ExtractFileDir(ExcludeTrailingPathDelimiter(FSaveDirectory)), 'snapshots'),
+    FileName, FConsole.RomIdentity, '');
+  FStatus.Region := FConsole.Region;
   FConsole.Apu.SetSampleRate(NES_SAMPLE_RATE);
+end;
+
+procedure TNesEmulationThread.StopAndSave;
+begin
+  Terminate;
+  if Suspended then
+    Start;
+  WaitFor;
+  // Retry on the caller after joining, propagating any disk error to the UI.
+  // Execute's final save also covers owners that just destroy the thread.
+  FConsole.SaveBattery;
 end;
 
 destructor TNesEmulationThread.Destroy;
@@ -79,6 +113,104 @@ begin
   FInput.Free;
   FWake.Free;
   FLock.Free;
+  FSnapshotDone.Free;
+  FSnapshotLock.Free;
+end;
+
+procedure TNesEmulationThread.SaveSnapshot(const Name: string);
+begin
+  SnapshotCommand(Name, False);
+end;
+
+procedure TNesEmulationThread.LoadSnapshot(const Name: string);
+begin
+  SnapshotCommand(Name, True);
+end;
+
+procedure TNesEmulationThread.SnapshotCommand(const Name: string; Loading: Boolean);
+begin
+  // Restrict names to portable slot names; callers cannot escape the game folder.
+  if (Name = '') or (Length(Name) > 80) then
+    raise EArgumentException.Create('Invalid snapshot name');
+  for var C in Name do
+    if not CharInSet(C, ['a'..'z', 'A'..'Z', '0'..'9', '-', '_']) then
+      raise EArgumentException.Create('Snapshot names use letters, digits, - and _');
+  FSnapshotLock.Enter;
+  try
+    if Suspended or Terminated or Finished then
+      raise ENesException.Create('Emulation worker is not running');
+    FLock.Enter;
+    try
+      FSnapshotDone.ResetEvent;
+      FSnapshotName := Name;
+      FSnapshotLoading := Loading;
+      FSnapshotError := '';
+      FSnapshotPending := True;
+    finally
+      FLock.Leave;
+    end;
+    FWake.SetEvent;
+    while FSnapshotDone.WaitFor(50) <> wrSignaled do
+      if Finished then
+        raise ENesException.Create('Emulation stopped before completing the snapshot');
+    FLock.Enter;
+    try
+      if FSnapshotError <> '' then
+        raise ENesException.Create(FSnapshotError);
+    finally
+      FLock.Leave;
+    end;
+  finally
+    FSnapshotLock.Leave;
+  end;
+end;
+
+function TNesEmulationThread.ProcessSnapshot: Boolean;
+begin
+  Result := False;
+  var Name: string;
+  var Loading: Boolean;
+  FLock.Enter;
+  try
+    if not FSnapshotPending then
+      Exit;
+    Name := FSnapshotName;
+    Loading := FSnapshotLoading;
+    FSnapshotPending := False;
+  finally
+    FLock.Leave;
+  end;
+  var ErrorText := '';
+  try
+    var Path := TPath.Combine(FSnapshotDirectory, Name + '.snapshot');
+    if Loading then
+    begin
+      FConsole.LoadSnapshot(Path);
+      FAudio.Clear;
+      FLock.Enter;
+      try
+        FDiagnostics.Clear;
+        FFrame := FConsole.Ppu.Frame;
+        FFramePending := True;
+        FStatus.Error := '';
+      finally
+        FLock.Leave;
+      end;
+      Result := True;
+    end
+    else
+      FConsole.SaveSnapshot(Path);
+  except
+    on E: Exception do
+      ErrorText := E.Message;
+  end;
+  FLock.Enter;
+  try
+    FSnapshotError := ErrorText;
+  finally
+    FLock.Leave;
+  end;
+  FSnapshotDone.SetEvent;
 end;
 
 procedure TNesEmulationThread.TerminatedSet;
@@ -214,20 +346,27 @@ end;
 
 procedure TNesEmulationThread.Execute;
 begin
+  if Terminated then
+    Exit;
   try
-    // Native backends may require initialization and teardown on the same thread.
-    FAudio := TNesAudio.Create;
+    FConsole.LoadBattery(FSaveDirectory);
     try
-      FLock.Enter;
+      // Native backends may require initialization and teardown on the same thread.
+      FAudio := TNesAudio.Create;
       try
-        FStatus.AudioError := FAudio.Error;
-        FStatus.AudioQueue := FAudio.QueueState;
+        FLock.Enter;
+        try
+          FStatus.AudioError := FAudio.Error;
+          FStatus.AudioQueue := FAudio.QueueState;
+        finally
+          FLock.Leave;
+        end;
+        RunEmulation;
       finally
-        FLock.Leave;
+        FreeAndNil(FAudio);
       end;
-      RunEmulation;
     finally
-      FreeAndNil(FAudio);
+      FConsole.SaveBattery;
     end;
   except
     on E: Exception do
@@ -245,15 +384,25 @@ end;
 procedure TNesEmulationThread.RunEmulation;
 begin
   var Samples: array[0..AUDIO_BLOCK_SAMPLES - 1] of SmallInt;
-  var FramePeriod := Round(TStopwatch.Frequency * (NES_FRAME_CYCLES - 0.5) / (3.0 * NES_CPU_HZ));
+  var FramePeriod := Round(TStopwatch.Frequency / FrameRate(FConsole.Region));
   var NextFrame := TStopwatch.GetTimeStamp;
   var FpsStart := NextFrame;
   var Frames := 0;
   var Paused := False;
   var Failed := False;
+  var NextSave := TStopwatch.GetTimeStamp + TStopwatch.Frequency * 5;
   while not Terminated do
   begin
     try
+      if ProcessSnapshot then
+      begin
+        NextFrame := TStopwatch.GetTimeStamp;
+        FpsStart := NextFrame;
+        Frames := 0;
+        if Failed then
+          Paused := False;
+        Failed := False;
+      end;
       var ResetRequested: Boolean;
       var PauseRequested: Boolean;
       var ResumeRequested: Boolean;
@@ -282,6 +431,7 @@ begin
         try
           FDiagnostics.Clear;
           FStatus := Default(TEmulationStatus);
+          FStatus.Region := FConsole.Region;
           FStatus.AudioError := FAudio.Error;
           FFramePending := False;
         finally
@@ -304,6 +454,7 @@ begin
       begin
         FAudio.Clear;
         Paused := True;
+        FConsole.SaveBattery;
       end;
       if Paused then
       begin
@@ -313,8 +464,7 @@ begin
       var ClockNow := TStopwatch.GetTimeStamp;
       if ClockNow < NextFrame then
       begin
-        FWake.WaitFor(Cardinal(Max(Int64(1),
-              (NextFrame - ClockNow) * 1000 div TStopwatch.Frequency)));
+        FWake.WaitFor(Cardinal(Max(Int64(1), (NextFrame - ClockNow) * 1000 div TStopwatch.Frequency)));
         Continue;
       end;
       if Terminated then
@@ -336,6 +486,11 @@ begin
       until Count = 0;
       Inc(Frames);
       ClockNow := TStopwatch.GetTimeStamp;
+      if ClockNow >= NextSave then
+      begin
+        FConsole.SaveBattery;
+        NextSave := ClockNow + TStopwatch.Frequency * 5;
+      end;
       FLock.Enter;
       try
         // One bounded mailbox: a slow UI skips old frames instead of queuing them.

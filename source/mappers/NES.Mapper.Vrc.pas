@@ -1,9 +1,9 @@
-﻿unit NES.Mapper.Vrc;
+unit NES.Mapper.Vrc;
 
 interface
 
 uses
-  NES.Types, NES.Mapper, NES.Mapper.Banked;
+  NES.State, NES.Types, NES.Mapper, NES.Mapper.Banked;
 
 type
   TMapperVrc = class(TMapperBanked)
@@ -14,6 +14,7 @@ type
     FPending: Boolean;
     procedure TickIrq;
   public
+    procedure SerializeState(State: TNesStateArchive); override;
     constructor Create(Board: Integer; const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode);
     procedure Reset; override;
     procedure ClockCpu; override;
@@ -23,6 +24,22 @@ type
   end;
 
 implementation
+
+procedure TMapperVrc.SerializeState(State: TNesStateArchive);
+begin
+  inherited;
+  State.Field(FBoard, SizeOf(FBoard));
+  State.Field(FPrescaler, SizeOf(FPrescaler));
+  State.Field(FCounter, SizeOf(FCounter));
+  State.Field(FLatch, SizeOf(FLatch));
+  State.Field(FChrRegisters, SizeOf(FChrRegisters));
+  State.Field(FPrg0, SizeOf(FPrg0));
+  State.Field(FPrg1, SizeOf(FPrg1));
+  State.Field(FSwap, SizeOf(FSwap));
+  State.Field(FControl, SizeOf(FControl));
+  State.Field(FRamLatch, SizeOf(FRamLatch));
+  State.Field(FPending, SizeOf(FPending));
+end;
 
 constructor TMapperVrc.Create(Board: Integer; const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode);
 begin

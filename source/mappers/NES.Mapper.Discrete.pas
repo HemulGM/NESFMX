@@ -1,9 +1,9 @@
-﻿unit NES.Mapper.Discrete;
+unit NES.Mapper.Discrete;
 
 interface
 
 uses
-  NES.Types, NES.Mapper, NES.Mapper.Banked;
+  NES.State, NES.Types, NES.Mapper, NES.Mapper.Banked;
 
 type
   TMapperDiscrete = class(TMapperBanked)
@@ -15,6 +15,7 @@ type
     FIrqEnabled, FIrqPending, FChrWritable, FLegacyChrWrites: Boolean;
     procedure UpdateIndexedBanks;
   public
+    procedure SerializeState(State: TNesStateArchive); override;
     constructor Create(Board: Integer; const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode; LegacyHeader: Boolean = False);
     procedure Reset; override;
     function CpuWrite(Address: UInt16; Value: UInt8): Boolean; override;
@@ -24,6 +25,20 @@ type
   end;
 
 implementation
+
+procedure TMapperDiscrete.SerializeState(State: TNesStateArchive);
+begin
+  inherited;
+  State.Field(FBoard, SizeOf(FBoard));
+  State.Field(FRegisters, SizeOf(FRegisters));
+  State.Field(FSelect, SizeOf(FSelect));
+  State.Field(FOuter, SizeOf(FOuter));
+  State.Field(FIrqCounter, SizeOf(FIrqCounter));
+  State.Field(FIrqEnabled, SizeOf(FIrqEnabled));
+  State.Field(FIrqPending, SizeOf(FIrqPending));
+  State.Field(FChrWritable, SizeOf(FChrWritable));
+  State.Field(FLegacyChrWrites, SizeOf(FLegacyChrWrites));
+end;
 
 constructor TMapperDiscrete.Create(Board: Integer; const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode; LegacyHeader: Boolean);
 begin

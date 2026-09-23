@@ -1,9 +1,9 @@
-﻿unit NES.Mapper.Mmc3Variants;
+unit NES.Mapper.Mmc3Variants;
 
 interface
 
 uses
-  NES.Types, NES.Mapper, NES.Mapper.Mmc3;
+  NES.State, NES.Types, NES.Mapper, NES.Mapper.Mmc3;
 
 type
   TMapperMmc3Variant = class(TMapperMmc3)
@@ -13,6 +13,7 @@ type
     FExtraRam: array[0..$1FFF] of Byte;
     function ChrBank(Address: UInt16): Integer;
   public
+    procedure SerializeState(State: TNesStateArchive); override;
     constructor Create(Board: Integer; const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode);
     procedure Reset; override;
     procedure ClockPpuAddress(Address: UInt16; PpuCycle: UInt64); override;
@@ -23,6 +24,14 @@ type
   end;
 
 implementation
+
+procedure TMapperMmc3Variant.SerializeState(State: TNesStateArchive);
+begin
+  inherited;
+  State.Field(FBoard, SizeOf(FBoard));
+  State.Field(FOuterChr, SizeOf(FOuterChr));
+  State.Field(FExtraRam, SizeOf(FExtraRam));
+end;
 
 constructor TMapperMmc3Variant.Create(Board: Integer; const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode);
 begin

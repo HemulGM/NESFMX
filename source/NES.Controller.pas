@@ -3,10 +3,13 @@ unit NES.Controller;
 interface
 
 uses
-  NES.Types;
+  NES.State, NES.Types;
+
+{$SCOPEDENUMS ON}
 
 type
-  TNesButton = (nbA, nbB, nbSelect, nbStart, nbUp, nbDown, nbLeft, nbRight);
+  TNesButton = (A, B, Select, Start, Up, Down, Left, Right);
+
   TNesButtons = set of TNesButton;
 
   TController = class
@@ -20,6 +23,7 @@ type
     FPowerPadHighShift: UInt8;
     procedure Latch;
   public
+    procedure SerializeState(State: TNesStateArchive);
     procedure SetButton(Button: TNesButton; Pressed: Boolean);
     procedure SetPowerPadButton(Button: Integer; Pressed: Boolean);
     procedure Write(Value: UInt8);
@@ -28,6 +32,17 @@ type
   end;
 
 implementation
+
+procedure TController.SerializeState(State: TNesStateArchive);
+begin
+  State.Field(FState, SizeOf(FState));
+  State.Field(FShift, SizeOf(FShift));
+  State.Field(FStrobe, SizeOf(FStrobe));
+  State.Field(FPowerPadEnabled, SizeOf(FPowerPadEnabled));
+  State.Field(FPowerPadState, SizeOf(FPowerPadState));
+  State.Field(FPowerPadLowShift, SizeOf(FPowerPadLowShift));
+  State.Field(FPowerPadHighShift, SizeOf(FPowerPadHighShift));
+end;
 
 procedure TController.Latch;
 const
@@ -97,3 +112,4 @@ begin
 end;
 
 end.
+

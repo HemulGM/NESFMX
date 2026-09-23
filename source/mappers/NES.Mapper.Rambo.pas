@@ -1,9 +1,9 @@
-﻿unit NES.Mapper.Rambo;
+unit NES.Mapper.Rambo;
 
 interface
 
 uses
-  NES.Types, NES.Mapper, NES.Mapper.Banked;
+  NES.State, NES.Types, NES.Mapper, NES.Mapper.Banked;
 
 type
   TMapperRambo = class(TMapperBanked)
@@ -16,6 +16,7 @@ type
     procedure UpdateBanks;
     procedure TickIrq(Delay: Integer);
   public
+    procedure SerializeState(State: TNesStateArchive); override;
     constructor Create(const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode);
     procedure Reset; override;
     procedure ClockCpu; override;
@@ -25,6 +26,24 @@ type
   end;
 
 implementation
+
+procedure TMapperRambo.SerializeState(State: TNesStateArchive);
+begin
+  inherited;
+  State.Field(FRegisters, SizeOf(FRegisters));
+  State.Field(FSelect, SizeOf(FSelect));
+  State.Field(FCounter, SizeOf(FCounter));
+  State.Field(FLatch, SizeOf(FLatch));
+  State.Field(FCpuDivider, SizeOf(FCpuDivider));
+  State.Field(FDelay, SizeOf(FDelay));
+  State.Field(FEnabled, SizeOf(FEnabled));
+  State.Field(FPending, SizeOf(FPending));
+  State.Field(FReload, SizeOf(FReload));
+  State.Field(FCycleMode, SizeOf(FCycleMode));
+  State.Field(FForceClock, SizeOf(FForceClock));
+  State.Field(FA12High, SizeOf(FA12High));
+  State.Field(FA12LowSince, SizeOf(FA12LowSince));
+end;
 
 constructor TMapperRambo.Create(const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode);
 begin

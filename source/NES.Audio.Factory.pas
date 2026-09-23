@@ -13,11 +13,11 @@ implementation
 // available. NES_AUDIO_NULL also allows testing the portable path on Windows.
 uses
   {$IF Defined(MSWINDOWS) and not Defined(NES_AUDIO_NULL)}
-  NES.Audio.Windows;
+  NES.Audio.Windows.MMSystem;
   {$ELSEIF Defined(ANDROID) and not Defined(NES_AUDIO_NULL)}
-  NES.Audio.Android;
+  NES.Audio.Android.AudioTrack;
   {$ELSEIF Defined(LINUX) and not Defined(ANDROID) and not Defined(NES_AUDIO_NULL)}
-  NES.Audio.Linux;
+  NES.Audio.Linux.Alsa;
   {$ELSE}
   NES.Audio.Null;
   {$ENDIF}

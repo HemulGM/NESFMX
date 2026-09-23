@@ -1,12 +1,14 @@
-﻿unit NES.Mapper.Bandai;
+unit NES.Mapper.Bandai;
 
 interface
 
 uses
-  NES.Types, NES.Mapper, NES.Mapper.Banked;
+  NES.State, NES.Types, NES.Mapper, NES.Mapper.Banked;
+
+{$SCOPEDENUMS ON}
 
 type
-  TEepromPhase = (epIdle, epDevice, epAddress, epWrite, epRead, epAck, epHostAck);
+  TEepromPhase = (Idle, Device, Address, Write, Read, Ack, HostAck);
 
   TMapperBandai = class(TMapperBanked)
   private
@@ -22,6 +24,9 @@ type
     procedure WriteSerial(Value: Byte);
     procedure UpdatePrg;
   public
+    procedure SerializeState(State: TNesStateArchive); override;
+    function GetSaveMemory: TByteArray; override;
+    procedure SetSaveMemory(const Data: TByteArray); override;
     constructor Create(SmallEeprom: Boolean; const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode);
     procedure Reset; override;
     procedure ClockCpu; override;
@@ -31,6 +36,40 @@ type
   end;
 
 implementation
+
+procedure TMapperBandai.SerializeState(State: TNesStateArchive);
+begin
+  inherited;
+  State.Field(FSmallEeprom, SizeOf(FSmallEeprom));
+  State.Field(FEeprom, SizeOf(FEeprom));
+  State.Field(FPhase, SizeOf(FPhase));
+  State.Field(FNextPhase, SizeOf(FNextPhase));
+  State.Field(FBits, SizeOf(FBits));
+  State.Field(FShift, SizeOf(FShift));
+  State.Field(FEepromAddress, SizeOf(FEepromAddress));
+  State.Field(FClock, SizeOf(FClock));
+  State.Field(FData, SizeOf(FData));
+  State.Field(FOutput, SizeOf(FOutput));
+  State.Field(FChrRegisters, SizeOf(FChrRegisters));
+  State.Field(FPrgRegister, SizeOf(FPrgRegister));
+  State.Field(FCounter, SizeOf(FCounter));
+  State.Field(FReload, SizeOf(FReload));
+  State.Field(FEnabled, SizeOf(FEnabled));
+  State.Field(FPending, SizeOf(FPending));
+end;
+
+function TMapperBandai.GetSaveMemory: TByteArray;
+begin
+  SetLength(Result, (256 shr Ord(FSmallEeprom)));
+  Move(FEeprom[0], Result[0], Length(Result));
+end;
+
+procedure TMapperBandai.SetSaveMemory(const Data: TByteArray);
+begin
+  if Length(Data) <> (256 shr Ord(FSmallEeprom)) then
+    raise ENesException.Create('Invalid cartridge save size');
+  Move(Data[0], FEeprom[0], Length(Data));
+end;
 
 constructor TMapperBandai.Create(SmallEeprom: Boolean; const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode);
 begin
@@ -47,8 +86,8 @@ begin
   FReload := 0;
   FEnabled := False;
   FPending := False;
-  FPhase := epIdle;
-  FNextPhase := epIdle;
+  FPhase := TEepromPhase.Idle;
+  FNextPhase := TEepromPhase.Idle;
   FBits := 0;
   FShift := 0;
   FEepromAddress := 0;
@@ -83,16 +122,16 @@ begin
     FBits := 0;
     FShift := 0;
     if Data then
-      FPhase := epIdle
+      FPhase := TEepromPhase.Idle
     else if FSmallEeprom then
-      FPhase := epAddress
+      FPhase := TEepromPhase.Address
     else
-      FPhase := epDevice;
+      FPhase := TEepromPhase.Device;
   end
   else if Clock and not FClock then
   begin
     case FPhase of
-      epDevice, epAddress, epWrite:
+      TEepromPhase.Device, TEepromPhase.Address, TEepromPhase.Write:
         if FBits < 8 then
         begin
           if FSmallEeprom then
@@ -101,7 +140,7 @@ begin
             FShift := ((FShift shl 1) or Ord(Data)) and $FF;
           Inc(FBits);
         end;
-      epRead:
+      TEepromPhase.Read:
         if FBits < 8 then
         begin
           var BitIndex := 7 - FBits;
@@ -110,59 +149,59 @@ begin
           FOutput := (FEeprom[FEepromAddress] and (1 shl BitIndex)) <> 0;
           Inc(FBits);
         end;
-      epAck:
+      TEepromPhase.Ack:
         FOutput := False;
-      epHostAck:
+      TEepromPhase.HostAck:
         if Data then
-          FNextPhase := epIdle
+          FNextPhase := TEepromPhase.Idle
         else
-          FNextPhase := epRead;
+          FNextPhase := TEepromPhase.Read;
     end;
   end
   else if not Clock and FClock then
   begin
     case FPhase of
-      epDevice, epAddress, epWrite:
+      TEepromPhase.Device, TEepromPhase.Address, TEepromPhase.Write:
         if FBits = 8 then
         begin
-          FNextPhase := epWrite;
+          FNextPhase := TEepromPhase.Write;
           case FPhase of
-            epDevice:
+            TEepromPhase.Device:
               if (FShift and $F0) <> $A0 then
-                FNextPhase := epIdle
+                FNextPhase := TEepromPhase.Idle
               else if (FShift and 1) <> 0 then
-                FNextPhase := epRead
+                FNextPhase := TEepromPhase.Read
               else
-                FNextPhase := epAddress;
-            epAddress:
+                FNextPhase := TEepromPhase.Address;
+            TEepromPhase.Address:
               begin
                 FEepromAddress := FShift and Mask;
                 if FSmallEeprom and ((FShift and $80) <> 0) then
-                  FNextPhase := epRead;
+                  FNextPhase := TEepromPhase.Read;
               end;
-            epWrite:
+            TEepromPhase.Write:
               begin
                 FEeprom[FEepromAddress] := FShift;
                 FEepromAddress := (FEepromAddress + 1) and Mask;
                 if FSmallEeprom then
-                  FNextPhase := epIdle;
+                  FNextPhase := TEepromPhase.Idle;
               end;
           end;
-          if (FPhase = epDevice) and (FNextPhase = epIdle) then
-            FPhase := epIdle
+          if (FPhase = TEepromPhase.Device) and (FNextPhase = TEepromPhase.Idle) then
+            FPhase := TEepromPhase.Idle
           else
-            FPhase := epAck;
+            FPhase := TEepromPhase.Ack;
           FOutput := True;
         end;
-      epRead:
+      TEepromPhase.Read:
         if FBits = 8 then
         begin
-          FPhase := epHostAck;
-          FNextPhase := epIdle;
+          FPhase := TEepromPhase.HostAck;
+          FNextPhase := TEepromPhase.Idle;
           FEepromAddress := (FEepromAddress + 1) and Mask;
           FOutput := True;
         end;
-      epAck, epHostAck:
+      TEepromPhase.Ack, TEepromPhase.HostAck:
         begin
           FPhase := FNextPhase;
           FBits := 0;

@@ -1,9 +1,9 @@
-﻿unit NES.Mapper.Mmc5;
+unit NES.Mapper.Mmc5;
 
 interface
 
 uses
-  NES.Types, NES.Mapper, NES.Mapper.Banked;
+  NES.State, NES.Types, NES.Mapper, NES.Mapper.Banked;
 
 type
   TMapperMmc5 = class(TMapperBanked)
@@ -21,6 +21,7 @@ type
     function SplitActive: Boolean;
     function NameSource(Address: UInt16): Integer;
   public
+    procedure SerializeState(State: TNesStateArchive); override;
     constructor Create(const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode);
     procedure Reset; override;
     procedure ClockScanline(Line: Integer; Rendering: Boolean); override;
@@ -34,6 +35,39 @@ type
   end;
 
 implementation
+
+procedure TMapperMmc5.SerializeState(State: TNesStateArchive);
+begin
+  inherited;
+  State.Field(FPrgRegisters, SizeOf(FPrgRegisters));
+  State.Field(FChrRegisters, SizeOf(FChrRegisters));
+  State.Field(FCiram, SizeOf(FCiram));
+  State.Field(FExRam, SizeOf(FExRam));
+  State.Field(FPrgMode, SizeOf(FPrgMode));
+  State.Field(FChrMode, SizeOf(FChrMode));
+  State.Field(FProtect1, SizeOf(FProtect1));
+  State.Field(FProtect2, SizeOf(FProtect2));
+  State.Field(FExMode, SizeOf(FExMode));
+  State.Field(FNameMap, SizeOf(FNameMap));
+  State.Field(FFillTile, SizeOf(FFillTile));
+  State.Field(FFillColor, SizeOf(FFillColor));
+  State.Field(FChrUpper, SizeOf(FChrUpper));
+  State.Field(FMultiplyA, SizeOf(FMultiplyA));
+  State.Field(FMultiplyB, SizeOf(FMultiplyB));
+  State.Field(FIrqTarget, SizeOf(FIrqTarget));
+  State.Field(FSplitControl, SizeOf(FSplitControl));
+  State.Field(FSplitScroll, SizeOf(FSplitScroll));
+  State.Field(FSplitBank, SizeOf(FSplitBank));
+  State.Field(FIrqEnabled, SizeOf(FIrqEnabled));
+  State.Field(FPending, SizeOf(FPending));
+  State.Field(FInFrame, SizeOf(FInFrame));
+  State.Field(FSpriteFetch, SizeOf(FSpriteFetch));
+  State.Field(FLargeSprites, SizeOf(FLargeSprites));
+  State.Field(FLastChrB, SizeOf(FLastChrB));
+  State.Field(FPixelX, SizeOf(FPixelX));
+  State.Field(FPixelY, SizeOf(FPixelY));
+  State.Field(FExTile, SizeOf(FExTile));
+end;
 
 constructor TMapperMmc5.Create(const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode);
 begin

@@ -1,9 +1,9 @@
-﻿unit NES.Mapper.Jy;
+unit NES.Mapper.Jy;
 
 interface
 
 uses
-  NES.Types, NES.Mapper, NES.Mapper.Banked;
+  NES.State, NES.Types, NES.Mapper, NES.Mapper.Banked;
 
 type
   TMapperJy = class(TMapperBanked)
@@ -22,6 +22,7 @@ type
     procedure TickIrq;
     function NameRamOffset(Address: UInt16): Integer;
   public
+    procedure SerializeState(State: TNesStateArchive); override;
     constructor Create(Board: Integer; const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode);
     procedure Reset; override;
     procedure ClockCpu; override;
@@ -36,6 +37,32 @@ type
   end;
 
 implementation
+
+procedure TMapperJy.SerializeState(State: TNesStateArchive);
+begin
+  inherited;
+  State.Field(FBoard, SizeOf(FBoard));
+  State.Field(FPrg, SizeOf(FPrg));
+  State.Field(FChr, SizeOf(FChr));
+  State.Field(FName, SizeOf(FName));
+  State.Field(FLatches, SizeOf(FLatches));
+  State.Field(FCiram, SizeOf(FCiram));
+  State.Field(FMode, SizeOf(FMode));
+  State.Field(FMirrorRegister, SizeOf(FMirrorRegister));
+  State.Field(FNameSelect, SizeOf(FNameSelect));
+  State.Field(FChrControl, SizeOf(FChrControl));
+  State.Field(FIrqMode, SizeOf(FIrqMode));
+  State.Field(FPrescaler, SizeOf(FPrescaler));
+  State.Field(FCounter, SizeOf(FCounter));
+  State.Field(FXor, SizeOf(FXor));
+  State.Field(FEnabled, SizeOf(FEnabled));
+  State.Field(FPending, SizeOf(FPending));
+  State.Field(FA12, SizeOf(FA12));
+  State.Field(FMultiplyA, SizeOf(FMultiplyA));
+  State.Field(FMultiplyB, SizeOf(FMultiplyB));
+  State.Field(FScratch, SizeOf(FScratch));
+  State.Field(FWorkBank, SizeOf(FWorkBank));
+end;
 
 constructor TMapperJy.Create(Board: Integer; const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode);
 begin

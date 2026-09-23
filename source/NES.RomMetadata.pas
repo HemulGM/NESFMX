@@ -3,9 +3,15 @@ unit NES.RomMetadata;
 interface
 
 uses
-  NES.Types;
+  NES.Types, NES.Mapper;
 
 function ResolveLegacyMapper(Declared: Integer; const Prg, Chr: NES.Types.TByteArray): Integer;
+
+function IsLegacyPalRom(const Prg, Chr: NES.Types.TByteArray): Boolean;
+
+function ResolveLegacyMirror(Declared: TMirrorMode; const Prg, Chr: NES.Types.TByteArray): TMirrorMode;
+
+function IsLegacyBatteryRom(const Sha1: string): Boolean;
 
 implementation
 
@@ -31,6 +37,53 @@ const
     (Declared: 90; Actual: 209; Sha1: '2e0889131da5ba9505a15b94887113f4360d98cd'),
     (Declared: 12; Actual: 13; Sha1: '3e24edd8c06713b775eaa66f3468f71693a542a9'),
     (Declared: 11; Actual: 144; Sha1: '80cd18bb63a5b52b1f3ad36c9191845eb29dd807'));
+
+function IsLegacyBatteryRom(const Sha1: string): Boolean;
+const
+  // Exact legacy payloads confirmed by FCEUmm ines-correct.h (236ccdfc).
+  Identities: array[0..10] of string = (
+    '4037db53d45db20e3a131d722dcd317adc966deb' { Dragon Ball Z.nes },
+    '63347651e2405bc6e50dff42f050c60332221e03' { Gemfire (U).nes },
+    '50e76171aa106895c745e7a4f8d9852db72aad12' { Heros of the Lance.nes },
+    '6197d576dd1c2a2304be82b7be6768a13c40bcf9' { L'Empereur (U).nes },
+    '66031e07d25b899ea3175a222c3939568d874883' { Nobunaga's Ambition 2 (U).nes },
+    'd9fe4f00109b7d75456e1673c2b30de68a125a5b' { Nobunaga's Ambition.nes },
+    '39f9094927fc87373f021244aabdc4db1e1c8f37' { Romance of the Three Kingdoms 2 (U).nes },
+    '209911d7bd15abb7bef2e35a473df725b6738cd7' { Secret Legacy of the Mongol Dynasty.nes },
+    'fcb1ef7398b842ebd28c3227852d7a132ce7b887' { Startropics 2 - Zoda's Revenge.nes },
+    '74c53fe9ac779f146c59ac01e701c9bf912b3c7b' { Startropics.nes },
+    '37267833c984f176db4b0bc9d45daba0fff45304' { Uncharted Waters (U).nes });
+begin
+  for var Identity in Identities do
+    if SameText(Sha1, Identity) then
+      Exit(True);
+  Result := False;
+end;
+
+function ResolveLegacyMirror(Declared: TMirrorMode; const Prg, Chr: NES.Types.TByteArray): TMirrorMode;
+begin
+  Result := Declared;
+  if (Declared <> TMirrorMode.Horizontal) or (Length(Prg) <> $20000) or (Length(Chr) <> 0) then
+    Exit;
+  var Hash := THashSHA1.Create;
+  Hash.Update(Prg[0], Length(Prg));
+  // Super Cars (USA), PRG CRC32 419461D0: NES-UNROM, vertical CIRAM wiring.
+  // https://nescartdb.com/profile/view/1033/super-cars
+  if SameText(Hash.HashAsString, '4f55afaf521841b3d50f8076be674321c1cf4623') then
+    Result := TMirrorMode.Vertical;
+end;
+
+function IsLegacyPalRom(const Prg, Chr: NES.Types.TByteArray): Boolean;
+begin
+  Result := False;
+  // Asterix: confirmed against PAL/NTSC runs; this legacy dump has byte 9 = 0.
+  // Match payload identity, never a filename or all cartridges on mapper 2.
+  if (Length(Prg) <> $20000) or (Length(Chr) <> 0) then
+    Exit;
+  var Hash := THashSHA1.Create;
+  Hash.Update(Prg[0], Length(Prg));
+  Result := SameText(Hash.HashAsString, '7b0b8d19bd56aa255501852136828300ee2d2457');
+end;
 
 function ResolveLegacyMapper(Declared: Integer; const Prg, Chr: NES.Types.TByteArray): Integer;
 begin

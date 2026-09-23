@@ -4,11 +4,12 @@
         <ProjectVersion>20.4</ProjectVersion>
         <FrameworkType>FMX</FrameworkType>
         <Base>True</Base>
-        <Config Condition="'$(Config)'==''">Release</Config>
-        <Platform Condition="'$(Platform)'==''">Android64</Platform>
+        <Config Condition="'$(Config)'==''">Debug</Config>
+        <Platform Condition="'$(Platform)'==''">Win32</Platform>
         <TargetedPlatforms>2790547</TargetedPlatforms>
         <AppType>Application</AppType>
         <MainSource>NESFMX.dpr</MainSource>
+        <ProjectName Condition="'$(ProjectName)'==''">NESFMX</ProjectName>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
         <Base>true</Base>
@@ -131,7 +132,7 @@
         <Icon_MainIcon>$(BDS)\bin\delphi_PROJECTICON.ico</Icon_MainIcon>
         <Icns_MainIcns>$(BDS)\bin\delphi_PROJECTICNS.icns</Icns_MainIcns>
         <SanitizedProjectName>NESFMX</SanitizedProjectName>
-        <DCC_UnitSearchPath>..\source;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>..\source;..\source\mappers;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Android)'!=''">
         <DCC_UsePackage>fmx;DbxCommonDriver;bindengine;IndyIPCommon;emsclient;IndyProtocols;dbxcds;FmxTeeUI;FireDACSqliteDriver;DbxClientDriver;soapmidas;dbexpress;inet;FireDACDBXDriver;CustomIPTransport;IndySystem;FireDACCommon;emsserverresource;bindcompdbx;rtl;DBXSqliteDriver;DataSnapFireDAC;FireDAC;xmlrtl;dsnap;DataSnapNativeClient;emshosting;FireDACCommonDriver;IndyIPClient;emsedge;bindcompfmx;fmxFireDAC;FMXAudioHGM;DataSnapCommon;fmxase;dbrtl;DBXInterBaseDriver;bindcomp;VLCPlayer;inetstn;IndyCore;RESTBackendComponents;RESTComponents;IndyIPServer;dsnapxml;DataSnapClient;DataSnapProviderClient;emsclientfiredac;FireDACDSDriver;tethering;CloudService;FMXTee;soaprtl;soapserver;FireDACIBDriver;$(DCC_UsePackage)</DCC_UsePackage>
@@ -348,47 +349,49 @@
             <FormType>fmx</FormType>
         </DCCReference>
         <DCCReference Include="NES.RomPicker.Android.pas"/>
-        <DCCReference Include="..\source\NES.Mapper.ColorDreams.pas"/>
-        <DCCReference Include="..\source\NES.Mapper.Banked.pas"/>
-        <DCCReference Include="..\source\NES.Mapper.Discrete.pas"/>
-        <DCCReference Include="..\source\NES.Mapper.MmcLatch.pas"/>
-        <DCCReference Include="..\source\NES.Mapper.Mmc3Variants.pas"/>
-        <DCCReference Include="..\source\NES.Mapper.Vrc.pas"/>
-        <DCCReference Include="..\source\NES.Mapper.Sunsoft.pas"/>
-        <DCCReference Include="..\source\NES.Mapper.Rambo.pas"/>
-        <DCCReference Include="..\source\NES.Mapper.Cony.pas"/>
-        <DCCReference Include="..\source\NES.Mapper.Bandai.pas"/>
-        <DCCReference Include="..\source\NES.Mapper.Jy.pas"/>
-        <DCCReference Include="..\source\NES.Mapper.Mmc5.pas"/>
-        <DCCReference Include="..\source\NES.Mapper.Factory.pas"/>
-        <DCCReference Include="..\source\NES.RomMetadata.pas"/>
-        <DCCReference Include="..\source\NES.Mapper.Mmc1.pas"/>
-        <DCCReference Include="..\source\NES.Mapper.Mmc3.pas"/>
-        <DCCReference Include="..\source\NES.Mapper.Nrom.pas"/>
+        <DCCReference Include="..\source\NES.Audio.Android.AudioTrack.pas"/>
+        <DCCReference Include="..\source\NES.Audio.Windows.MMSystem.pas"/>
+        <DCCReference Include="..\source\NES.Audio.Linux.Alsa.pas"/>
         <DCCReference Include="..\source\NES.Mapper.pas"/>
-        <DCCReference Include="..\source\NES.Mapper.Uxrom.pas"/>
+        <DCCReference Include="..\source\NES.Mapper.Factory.pas"/>
+        <DCCReference Include="..\source\mappers\NES.Mapper.ColorDreams.pas"/>
+        <DCCReference Include="..\source\mappers\NES.Mapper.Banked.pas"/>
+        <DCCReference Include="..\source\mappers\NES.Mapper.Discrete.pas"/>
+        <DCCReference Include="..\source\mappers\NES.Mapper.MmcLatch.pas"/>
+        <DCCReference Include="..\source\mappers\NES.Mapper.Mmc3Variants.pas"/>
+        <DCCReference Include="..\source\mappers\NES.Mapper.Vrc.pas"/>
+        <DCCReference Include="..\source\mappers\NES.Mapper.Sunsoft.pas"/>
+        <DCCReference Include="..\source\mappers\NES.Mapper.Rambo.pas"/>
+        <DCCReference Include="..\source\mappers\NES.Mapper.Cony.pas"/>
+        <DCCReference Include="..\source\mappers\NES.Mapper.Bandai.pas"/>
+        <DCCReference Include="..\source\mappers\NES.Mapper.Jy.pas"/>
+        <DCCReference Include="..\source\mappers\NES.Mapper.Mmc5.pas"/>
+        <DCCReference Include="..\source\mappers\NES.Mapper.Mmc1.pas"/>
+        <DCCReference Include="..\source\mappers\NES.Mapper.Mmc3.pas"/>
+        <DCCReference Include="..\source\mappers\NES.Mapper.Nrom.pas"/>
+        <DCCReference Include="..\source\mappers\NES.Mapper.Uxrom.pas"/>
+        <DCCReference Include="..\source\mappers\NES.Mapper.Axrom.pas"/>
+        <DCCReference Include="..\source\mappers\NES.Mapper.Cnrom.pas"/>
+        <DCCReference Include="..\source\mappers\NES.Mapper.Gxrom.pas"/>
         <DCCReference Include="..\source\NES.PPU.pas"/>
+        <DCCReference Include="..\source\NES.State.pas"/>
+        <DCCReference Include="..\source\NES.SavePaths.pas"/>
         <DCCReference Include="..\source\NES.Types.pas"/>
         <DCCReference Include="..\source\NES.APU.pas"/>
         <DCCReference Include="..\source\NES.Audio.pas"/>
         <DCCReference Include="..\source\NES.Audio.Backend.pas"/>
         <DCCReference Include="..\source\NES.Audio.Factory.pas"/>
         <DCCReference Include="..\source\NES.Audio.Null.pas"/>
-        <DCCReference Include="..\source\NES.Audio.AudioTrack.pas"/>
-        <DCCReference Include="..\source\NES.Audio.Windows.pas"/>
-        <DCCReference Include="..\source\NES.Audio.Alsa.pas"/>
         <DCCReference Include="..\source\NES.AudioDiagnostics.pas"/>
         <DCCReference Include="..\source\NES.Emulation.pas"/>
         <DCCReference Include="..\source\NES.Bus.pas"/>
         <DCCReference Include="..\source\NES.Cartridge.pas"/>
+        <DCCReference Include="..\source\NES.RomMetadata.pas"/>
         <DCCReference Include="..\source\NES.Console.pas"/>
         <DCCReference Include="..\source\NES.Consts.pas"/>
         <DCCReference Include="..\source\NES.Controller.pas"/>
         <DCCReference Include="..\source\NES.Input.pas"/>
         <DCCReference Include="..\source\NES.CPU.pas"/>
-        <DCCReference Include="..\source\NES.Mapper.Axrom.pas"/>
-        <DCCReference Include="..\source\NES.Mapper.Cnrom.pas"/>
-        <DCCReference Include="..\source\NES.Mapper.Gxrom.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

@@ -3,7 +3,7 @@ unit NES.Mapper.Cnrom;
 interface
 
 uses
-  NES.Types, NES.Mapper;
+  NES.State, NES.Types, NES.Mapper;
 
 type
   TMapperCnrom = class(TMapper)
@@ -13,6 +13,7 @@ type
     FMirrorMode: TMirrorMode;
     FChrBank: UInt8;
   public
+    procedure SerializeState(State: TNesStateArchive); override;
     constructor Create(const APrgRom, AChrData: TByteArray; AHasChrRam: Boolean; AMirrorMode: TMirrorMode);
     function CpuRead(Address: UInt16; out Value: UInt8): Boolean; override;
     function CpuWrite(Address: UInt16; Value: UInt8): Boolean; override;
@@ -23,6 +24,16 @@ type
   end;
 
 implementation
+
+procedure TMapperCnrom.SerializeState(State: TNesStateArchive);
+begin
+  inherited;
+  if Length(FChrMemory) > 0 then
+    State.Field(FChrMemory[0], Length(FChrMemory) * SizeOf(FChrMemory[0]));
+  State.Field(FHasChrRam, SizeOf(FHasChrRam));
+  State.Field(FMirrorMode, SizeOf(FMirrorMode));
+  State.Field(FChrBank, SizeOf(FChrBank));
+end;
 
 constructor TMapperCnrom.Create(const APrgRom, AChrData: TByteArray; AHasChrRam: Boolean; AMirrorMode: TMirrorMode);
 begin

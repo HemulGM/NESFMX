@@ -3,7 +3,7 @@ unit NES.Bus;
 interface
 
 uses
-  NES.Types, NES.PPU, NES.Cartridge, NES.Controller, NES.APU;
+  NES.State, NES.Types, NES.PPU, NES.Cartridge, NES.Controller, NES.APU;
 
 type
   TNesBus = class
@@ -30,6 +30,7 @@ type
     procedure WriteControllers(Value: UInt8);
     function ReadController(Port: Integer): UInt8;
   public
+    procedure SerializeState(State: TNesStateArchive);
     constructor Create;
     procedure Reset;
     procedure Connect(Cartridge: TCartridge; Ppu: TPpu; Apu: TApu; Controller1, Controller2: TController; Controller3: TController = nil; Controller4: TController = nil);
@@ -44,6 +45,22 @@ type
   end;
 
 implementation
+
+procedure TNesBus.SerializeState(State: TNesStateArchive);
+begin
+  State.Field(FRam, SizeOf(FRam));
+  State.Field(FFourScoreEnabled, SizeOf(FFourScoreEnabled));
+  State.Field(FControllerStrobe, SizeOf(FControllerStrobe));
+  State.Field(FControllerReadIndex, SizeOf(FControllerReadIndex));
+  State.Field(FDmaActive, SizeOf(FDmaActive));
+  State.Field(FDmaDummy, SizeOf(FDmaDummy));
+  State.Field(FDmaAlign, SizeOf(FDmaAlign));
+  State.Field(FDmaPage, SizeOf(FDmaPage));
+  State.Field(FDmaAddress, SizeOf(FDmaAddress));
+  State.Field(FDmaData, SizeOf(FDmaData));
+  State.Field(FDmaHaveData, SizeOf(FDmaHaveData));
+  State.Field(FCpuCycle, SizeOf(FCpuCycle));
+end;
 
 constructor TNesBus.Create;
 begin
@@ -123,7 +140,6 @@ end;
 
 function TNesBus.CpuRead(Address: UInt16): UInt8;
 begin
-  var Value: UInt8;
   if Address < $2000 then
     Exit(FRam[Address and $07FF]);
   if Address < $4000 then
@@ -138,6 +154,7 @@ begin
       Exit(ReadController(1));
   end;
 
+  var Value: UInt8;
   if (FCartridge <> nil) and (FCartridge.Mapper <> nil) and FCartridge.Mapper.CpuRead(Address, Value) then
     Exit(Value);
   Result := 0;

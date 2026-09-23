@@ -1,9 +1,9 @@
-﻿unit NES.Mapper.MmcLatch;
+unit NES.Mapper.MmcLatch;
 
 interface
 
 uses
-  NES.Types, NES.Mapper, NES.Mapper.Banked;
+  NES.State, NES.Types, NES.Mapper, NES.Mapper.Banked;
 
 type
   TMapperMmcLatch = class(TMapperBanked)
@@ -13,6 +13,7 @@ type
     FRegisters: array[0..3] of Byte;
     procedure UpdateChr;
   public
+    procedure SerializeState(State: TNesStateArchive); override;
     constructor Create(Mmc4: Boolean; const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode);
     procedure Reset; override;
     function CpuWrite(Address: UInt16; Value: UInt8): Boolean; override;
@@ -20,6 +21,14 @@ type
   end;
 
 implementation
+
+procedure TMapperMmcLatch.SerializeState(State: TNesStateArchive);
+begin
+  inherited;
+  State.Field(FMmc4, SizeOf(FMmc4));
+  State.Field(FLatches, SizeOf(FLatches));
+  State.Field(FRegisters, SizeOf(FRegisters));
+end;
 
 constructor TMapperMmcLatch.Create(Mmc4: Boolean; const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode);
 begin

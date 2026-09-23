@@ -3,7 +3,7 @@ unit NES.Mapper.Nrom;
 interface
 
 uses
-  NES.Types, NES.Mapper;
+  NES.State, NES.Types, NES.Mapper;
 
 type
   TMapperNrom = class(TMapper)
@@ -14,6 +14,9 @@ type
     FHasChrRam: Boolean;
     FMirrorMode: TMirrorMode;
   public
+    procedure SerializeState(State: TNesStateArchive); override;
+    function GetSaveMemory: TByteArray; override;
+    procedure SetSaveMemory(const Data: TByteArray); override;
     constructor Create(const APrgRom, AChrData: TByteArray; AHasChrRam: Boolean; AMirrorMode: TMirrorMode);
     function CpuRead(Address: UInt16; out Value: UInt8): Boolean; override;
     function CpuWrite(Address: UInt16; Value: UInt8): Boolean; override;
@@ -24,6 +27,29 @@ type
   end;
 
 implementation
+
+procedure TMapperNrom.SerializeState(State: TNesStateArchive);
+begin
+  inherited;
+  if Length(FChrMemory) > 0 then
+    State.Field(FChrMemory[0], Length(FChrMemory) * SizeOf(FChrMemory[0]));
+  State.Field(FPrgRam, SizeOf(FPrgRam));
+  State.Field(FHasChrRam, SizeOf(FHasChrRam));
+  State.Field(FMirrorMode, SizeOf(FMirrorMode));
+end;
+
+function TMapperNrom.GetSaveMemory: TByteArray;
+begin
+  SetLength(Result, SizeOf(FPrgRam));
+  Move(FPrgRam[0], Result[0], Length(Result));
+end;
+
+procedure TMapperNrom.SetSaveMemory(const Data: TByteArray);
+begin
+  if Length(Data) <> SizeOf(FPrgRam) then
+    raise ENesException.Create('Invalid cartridge save size');
+  Move(Data[0], FPrgRam[0], Length(Data));
+end;
 
 constructor TMapperNrom.Create(const APrgRom, AChrData: TByteArray; AHasChrRam: Boolean; AMirrorMode: TMirrorMode);
 begin
@@ -89,8 +115,6 @@ end;
 
 procedure TMapperNrom.Reset;
 begin
-  for var i := Low(FPrgRam) to High(FPrgRam) do
-    FPrgRam[i] := 0;
 end;
 
 end.

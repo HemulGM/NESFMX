@@ -3,7 +3,7 @@ unit NES.APU;
 interface
 
 uses
-  System.Math, NES.Types, NES.Consts;
+  NES.State, System.Math, NES.Types, NES.Consts;
 
 type
   TApuRegisterWriteEvent = procedure(Cycle: UInt32; Address: UInt16; Value: UInt8) of object;
@@ -66,6 +66,7 @@ type
 
   TApu = class
   private
+    FRegion: TNesRegion;
     FOnRegisterWrite: TApuRegisterWriteEvent;
     FPulse1: TPulseChannel;
     FPulse2: TPulseChannel;
@@ -117,7 +118,10 @@ type
     function MixSample: Double;
     function FilterSample(Value: Double): Double;
   public
+    procedure SerializeState(State: TNesStateArchive);
     constructor Create;
+    // Select timing before running; resets channels and buffered PCM.
+    procedure SetRegion(Value: TNesRegion);
     procedure Reset;
     procedure SetSampleRate(Value: Integer);
     procedure CpuWrite(Address: UInt16; Value: UInt8);
@@ -148,6 +152,41 @@ type
 
 implementation
 
+procedure TApu.SerializeState(State: TNesStateArchive);
+begin
+  State.Field(FRegion, SizeOf(FRegion));
+  State.Field(FPulse1, SizeOf(FPulse1));
+  State.Field(FPulse2, SizeOf(FPulse2));
+  State.Field(FTriangle, SizeOf(FTriangle));
+  State.Field(FNoise, SizeOf(FNoise));
+  State.Field(FDmc, SizeOf(FDmc));
+  State.Field(FCycle, SizeOf(FCycle));
+  State.Field(FFrameCounter, SizeOf(FFrameCounter));
+  State.Field(FFrameMode5, SizeOf(FFrameMode5));
+  State.Field(FFrameIrqInhibit, SizeOf(FFrameIrqInhibit));
+  State.Field(FPendingFrameMode5, SizeOf(FPendingFrameMode5));
+  State.Field(FPendingFrameIrqInhibit, SizeOf(FPendingFrameIrqInhibit));
+  State.Field(FFrameResetDelay, SizeOf(FFrameResetDelay));
+  State.Field(FFrameIrqFlag, SizeOf(FFrameIrqFlag));
+  State.Field(FSampleRate, SizeOf(FSampleRate));
+  State.Field(FSampleTimer, SizeOf(FSampleTimer));
+  State.Field(FSampleStep, SizeOf(FSampleStep));
+  if Length(FBuffer) > 0 then
+    State.Field(FBuffer[0], Length(FBuffer) * SizeOf(FBuffer[0]));
+  State.Field(FWritePos, SizeOf(FWritePos));
+  State.Field(FReadPos, SizeOf(FReadPos));
+  State.Field(FCount, SizeOf(FCount));
+  State.Field(FWriteCounts, SizeOf(FWriteCounts));
+  State.Field(FHp90Output, SizeOf(FHp90Output));
+  State.Field(FHp90Input, SizeOf(FHp90Input));
+  State.Field(FHp440Output, SizeOf(FHp440Output));
+  State.Field(FHp440Input, SizeOf(FHp440Input));
+  State.Field(FLp14Output, SizeOf(FLp14Output));
+  State.Field(FHp90Coefficient, SizeOf(FHp90Coefficient));
+  State.Field(FHp440Coefficient, SizeOf(FHp440Coefficient));
+  State.Field(FLp14Coefficient, SizeOf(FLp14Coefficient));
+end;
+
 const
   LENGTH_TABLE: array[0..31] of Integer = (
     10, 254, 20, 2, 40, 4, 80, 6,
@@ -165,14 +204,29 @@ const
     15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
   );
-  NOISE_PERIOD_TABLE: array[0..15] of Integer = (4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068);
-  DMC_PERIOD_TABLE: array[0..15] of Integer = (428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54);
+  NOISE_PERIOD_TABLE: array[TNesRegion, 0..15] of Integer = (
+    (4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068),
+    (4, 8, 14, 30, 60, 88, 118, 148, 188, 236, 354, 472, 708, 944, 1890, 3778));
+  DMC_PERIOD_TABLE: array[TNesRegion, 0..15] of Integer = (
+    (428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54),
+    (398, 354, 316, 298, 276, 236, 210, 198, 176, 148, 132, 118, 98, 78, 66, 50));
+  // CPU-cycle positions of the quarter/half-frame sequencer events.
+  FRAME_STEPS: array[TNesRegion, 0..4] of UInt32 = (
+    (7457, 14913, 22371, 29829, 37281),
+    (8313, 16627, 24939, 33253, 41565));
 
 constructor TApu.Create;
 begin
   inherited Create;
   SetSampleRate(44100);
   SetLength(FBuffer, 16384);
+  Reset;
+end;
+
+procedure TApu.SetRegion(Value: TNesRegion);
+begin
+  FRegion := Value;
+  SetSampleRate(FSampleRate);
   Reset;
 end;
 
@@ -183,11 +237,11 @@ begin
   FillChar(FTriangle, SizeOf(FTriangle), 0);
   FillChar(FNoise, SizeOf(FNoise), 0);
   FNoise.Shift := 1;
-  FNoise.TimerReload := NOISE_PERIOD_TABLE[0];
+  FNoise.TimerReload := NOISE_PERIOD_TABLE[FRegion, 0];
   FillChar(FDmc, SizeOf(FDmc), 0);
   FDmc.SampleAddress := $C000;
   FDmc.SampleLength := 1;
-  FDmc.TimerReload := DMC_PERIOD_TABLE[0];
+  FDmc.TimerReload := DMC_PERIOD_TABLE[FRegion, 0];
   FDmc.Timer := FDmc.TimerReload - 1;
   FDmc.BitsRemaining := 8;
   FDmc.BufferEmpty := True;
@@ -217,7 +271,7 @@ begin
   if Value <= 0 then
     Value := 44100;
   FSampleRate := Value;
-  FSampleStep := NES_CPU_HZ / FSampleRate;
+  FSampleStep := CpuFrequency(FRegion) / FSampleRate;
   var Dt: Double := 1.0 / FSampleRate;
   var Rc: Double := 1.0 / (2.0 * Pi * 90.0);
   FHp90Coefficient := Rc / (Rc + Dt);
@@ -356,8 +410,7 @@ procedure TApu.ClockSweep(var Channel: TPulseChannel; NegateExtra: Integer);
 begin
   var NewPeriod: Integer;
   var DividerPeriod: Integer := (Channel.Reg1 shr 4) and 7;
-  if (Channel.SweepDivider = 0) and ((Channel.Reg1 and $80) <> 0) and
-    ((Channel.Reg1 and 7) <> 0) then
+  if (Channel.SweepDivider = 0) and ((Channel.Reg1 and $80) <> 0) and ((Channel.Reg1 and 7) <> 0) then
   begin
     NewPeriod := PulseSweepTarget(Channel, NegateExtra);
     if (Channel.TimerReload >= 8) and (NewPeriod <= $7FF) and (NewPeriod >= 0) then
@@ -463,7 +516,7 @@ begin
     $400E:
       begin
         FNoise.Reg2 := Value;
-        FNoise.TimerReload := NOISE_PERIOD_TABLE[Value and $0F];
+        FNoise.TimerReload := NOISE_PERIOD_TABLE[FRegion, Value and $0F];
       end;
     $400F:
       begin
@@ -475,7 +528,7 @@ begin
     $4010:
       begin
         FDmc.Control := Value;
-        FDmc.TimerReload := DMC_PERIOD_TABLE[Value and $0F];
+        FDmc.TimerReload := DMC_PERIOD_TABLE[FRegion, Value and $0F];
         if (Value and $80) = 0 then
           FDmc.IrqFlag := False;
       end;
@@ -719,43 +772,37 @@ begin
   if not FrameReset then
     Inc(FFrameCounter);
 
+  if (FFrameCounter = FRAME_STEPS[FRegion, 0]) or (FFrameCounter = FRAME_STEPS[FRegion, 2]) then
+    QuarterFrame;
+  if FFrameCounter = FRAME_STEPS[FRegion, 1] then
+  begin
+    QuarterFrame;
+    HalfFrame;
+  end;
   if not FFrameMode5 then
   begin
-    case FFrameCounter of
-      7457, 22371:
-        QuarterFrame;
-      14913:
-        begin
-          QuarterFrame;
-          HalfFrame;
-        end;
-      29828, 29829, 29830:
-        begin
-          if FFrameCounter = 29829 then
-          begin
-            QuarterFrame;
-            HalfFrame;
-          end;
-          if not FFrameIrqInhibit then
-            FFrameIrqFlag := True;
-          if FFrameCounter = 29830 then
-            FFrameCounter := 0;
-        end;
+    if FFrameCounter = FRAME_STEPS[FRegion, 3] then
+    begin
+      QuarterFrame;
+      HalfFrame;
+    end;
+    if (FFrameCounter >= FRAME_STEPS[FRegion, 3] - 1) and (FFrameCounter <= FRAME_STEPS[FRegion, 3] + 1) then
+    begin
+      if not FFrameIrqInhibit then
+        FFrameIrqFlag := True;
+      if FFrameCounter = FRAME_STEPS[FRegion, 3] + 1 then
+        FFrameCounter := 0;
     end;
   end
   else
   begin
-    case FFrameCounter of
-      7457, 22371:
-        QuarterFrame;
-      14913, 37281:
-        begin
-          QuarterFrame;
-          HalfFrame;
-        end;
-      37282:
-        FFrameCounter := 0;
+    if FFrameCounter = FRAME_STEPS[FRegion, 4] then
+    begin
+      QuarterFrame;
+      HalfFrame;
     end;
+    if FFrameCounter = FRAME_STEPS[FRegion, 4] + 1 then
+      FFrameCounter := 0;
   end;
 
   if (FCycle and 1) = 0 then

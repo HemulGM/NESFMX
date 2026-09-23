@@ -71,11 +71,11 @@ implementation
 
 uses
   System.SysUtils, System.Math, System.Math.Vectors, System.Diagnostics,
-  FMX.Graphics
   {$IFDEF ANDROID}
-    , Androidapi.JNIBridge, Androidapi.JNI.GraphicsContentViewText,
-    FMX.Platform.Android
-  {$ENDIF};
+  Androidapi.JNIBridge, Androidapi.JNI.GraphicsContentViewText,
+  FMX.Platform.Android,
+  {$ENDIF}
+  FMX.Graphics;
 
 {$IFDEF ANDROID}
 type
@@ -193,19 +193,19 @@ begin
   CX := 76 * U;
   CY := Height * 0.43;
   FDPad := RectF(CX - 60 * U, CY - 60 * U, CX + 60 * U, CY + 60 * U);
-  FBounds[nbUp] := RectF(CX - 20 * U, CY - 58 * U, CX + 20 * U, CY - 18 * U);
-  FBounds[nbDown] := RectF(CX - 20 * U, CY + 18 * U, CX + 20 * U, CY + 58 * U);
-  FBounds[nbLeft] := RectF(CX - 58 * U, CY - 20 * U, CX - 18 * U, CY + 20 * U);
-  FBounds[nbRight] := RectF(CX + 18 * U, CY - 20 * U, CX + 58 * U, CY + 20 * U);
+  FBounds[TNesButton.Up] := RectF(CX - 20 * U, CY - 58 * U, CX + 20 * U, CY - 18 * U);
+  FBounds[TNesButton.Down] := RectF(CX - 20 * U, CY + 18 * U, CX + 20 * U, CY + 58 * U);
+  FBounds[TNesButton.Left] := RectF(CX - 58 * U, CY - 20 * U, CX - 18 * U, CY + 20 * U);
+  FBounds[TNesButton.Right] := RectF(CX + 18 * U, CY - 20 * U, CX + 58 * U, CY + 20 * U);
   AX := Width - 45 * U;
   AY := CY - 18 * U;
   BX := AX - 66 * U;
   BY := CY + 18 * U;
-  FBounds[nbA] := RectF(AX - 27 * U, AY - 27 * U, AX + 27 * U, AY + 27 * U);
-  FBounds[nbB] := RectF(BX - 27 * U, BY - 27 * U, BX + 27 * U, BY + 27 * U);
+  FBounds[TNesButton.A] := RectF(AX - 27 * U, AY - 27 * U, AX + 27 * U, AY + 27 * U);
+  FBounds[TNesButton.B] := RectF(BX - 27 * U, BY - 27 * U, BX + 27 * U, BY + 27 * U);
   CY := Height - 34 * U;
-  FBounds[nbSelect] := RectF(Width / 2 - 58 * U, CY - 14 * U, Width / 2 - 8 * U, CY + 10 * U);
-  FBounds[nbStart] := RectF(Width / 2 + 8 * U, CY - 14 * U, Width / 2 + 58 * U, CY + 10 * U);
+  FBounds[TNesButton.Select] := RectF(Width / 2 - 58 * U, CY - 14 * U, Width / 2 - 8 * U, CY + 10 * U);
+  FBounds[TNesButton.Start] := RectF(Width / 2 + 8 * U, CY - 14 * U, Width / 2 + 58 * U, CY + 10 * U);
 end;
 
 procedure TNesGamepad.Resize;
@@ -273,21 +273,21 @@ begin
           Exit;
         if DX >= DY * 0.42 then
           if Delta.X < 0 then
-            Include(Result, nbLeft)
+            Include(Result, TNesButton.Left)
           else
-            Include(Result, nbRight);
+            Include(Result, TNesButton.Right);
         if DY >= DX * 0.42 then
           if Delta.Y < 0 then
-            Include(Result, nbUp)
+            Include(Result, TNesButton.Up)
           else
-            Include(Result, nbDown);
+            Include(Result, TNesButton.Down);
       end;
     TRegion.Actions:
-      for var Button := nbA to nbB do
+      for var Button := TNesButton.A to TNesButton.B do
         if Point.Distance(FBounds[Button].CenterPoint) <= 33 * FUnit then
           Include(Result, Button);
     TRegion.Menu:
-      for var Button := nbSelect to nbStart do
+      for var Button := TNesButton.Select to TNesButton.Start do
       begin
         var Bounds := FBounds[Button];
         Bounds.Inflate(5 * FUnit, 9 * FUnit);
@@ -354,10 +354,10 @@ begin
   var NewButtons: TNesButtons := [];
   for var Contact in FContacts.Values do
     NewButtons := NewButtons + Contact.Buttons;
-  if [nbLeft, nbRight] <= NewButtons then
-    NewButtons := NewButtons - [nbLeft, nbRight];
-  if [nbUp, nbDown] <= NewButtons then
-    NewButtons := NewButtons - [nbUp, nbDown];
+  if [TNesButton.Left, TNesButton.Right] <= NewButtons then
+    NewButtons := NewButtons - [TNesButton.Left, TNesButton.Right];
+  if [TNesButton.Up, TNesButton.Down] <= NewButtons then
+    NewButtons := NewButtons - [TNesButton.Up, TNesButton.Down];
   if NewButtons = FButtons then
     Exit;
   var NowTicks := TStopwatch.GetTimeStamp;
@@ -437,7 +437,7 @@ begin
     var Shadow := R;
     Shadow.Offset(0, 4 * FUnit * (1 - Level));
     Canvas.Fill.Color := $FF080D15;
-    var RoundButton := Button in [nbA, nbB];
+    var RoundButton := Button in [TNesButton.A, TNesButton.B];
     if RoundButton then
       Canvas.FillEllipse(Shadow, Opacity)
     else
@@ -453,12 +453,12 @@ begin
     Canvas.Fill.Color := $FFF3F5FA;
     Canvas.Font.Family := 'sans-serif';
     Canvas.Font.Style := [TFontStyle.fsBold];
-    if Button in [nbA, nbB] then
+    if Button in [TNesButton.A, TNesButton.B] then
     begin
       Canvas.Font.Size := 23 * FUnit;
       Canvas.FillText(R, Labels[Button], False, Opacity, [], TTextAlign.Center, TTextAlign.Center);
     end
-    else if Button in [nbSelect, nbStart] then
+    else if Button in [TNesButton.Select, TNesButton.Start] then
     begin
       var Bar := R;
       Bar.Inflate(-14 * FUnit, -10 * FUnit);
@@ -476,25 +476,25 @@ begin
       var C := R.CenterPoint;
       var S := 6 * FUnit;
       case Button of
-        nbUp:
+        TNesButton.Up:
           begin
             P[0] := PointF(C.X, C.Y - S);
             P[1] := PointF(C.X - S, C.Y + S);
             P[2] := PointF(C.X + S, C.Y + S);
           end;
-        nbDown:
+        TNesButton.Down:
           begin
             P[0] := PointF(C.X, C.Y + S);
             P[1] := PointF(C.X - S, C.Y - S);
             P[2] := PointF(C.X + S, C.Y - S);
           end;
-        nbLeft:
+        TNesButton.Left:
           begin
             P[0] := PointF(C.X - S, C.Y);
             P[1] := PointF(C.X + S, C.Y - S);
             P[2] := PointF(C.X + S, C.Y + S);
           end;
-        nbRight:
+        TNesButton.Right:
           begin
             P[0] := PointF(C.X + S, C.Y);
             P[1] := PointF(C.X - S, C.Y - S);

@@ -3,7 +3,7 @@ unit NES.Mapper.Axrom;
 interface
 
 uses
-  NES.Types, NES.Mapper;
+  NES.State, NES.Types, NES.Mapper;
 
 type
   TMapperAxrom = class(TMapper)
@@ -12,6 +12,7 @@ type
     FHasChrRam: Boolean;
     FBankRegister: UInt8;
   public
+    procedure SerializeState(State: TNesStateArchive); override;
     constructor Create(const APrgRom, AChrData: TByteArray; AHasChrRam: Boolean);
     function CpuRead(Address: UInt16; out Value: UInt8): Boolean; override;
     function CpuWrite(Address: UInt16; Value: UInt8): Boolean; override;
@@ -22,6 +23,15 @@ type
   end;
 
 implementation
+
+procedure TMapperAxrom.SerializeState(State: TNesStateArchive);
+begin
+  inherited;
+  if Length(FChrMemory) > 0 then
+    State.Field(FChrMemory[0], Length(FChrMemory) * SizeOf(FChrMemory[0]));
+  State.Field(FHasChrRam, SizeOf(FHasChrRam));
+  State.Field(FBankRegister, SizeOf(FBankRegister));
+end;
 
 constructor TMapperAxrom.Create(const APrgRom, AChrData: TByteArray; AHasChrRam: Boolean);
 begin
@@ -67,9 +77,9 @@ end;
 function TMapperAxrom.GetMirrorMode: TMirrorMode;
 begin
   if (FBankRegister and $10) = 0 then
-    Result := mmSingle0
+    Result := TMirrorMode.Single0
   else
-    Result := mmSingle1;
+    Result := TMirrorMode.Single1;
 end;
 
 procedure TMapperAxrom.Reset;

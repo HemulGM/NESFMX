@@ -1,9 +1,46 @@
-unit NES.Audio.Linux;
+unit NES.Audio.Linux.Alsa;
 
 interface
 
 uses
-  System.SysUtils, NES.Audio.Backend, NES.Audio.Alsa;
+  System.SysUtils, NES.Audio.Backend;
+
+const
+  ALSA_LIBRARY = 'libasound.so.2';
+
+const
+  SND_PCM_STREAM_PLAYBACK = 0;
+  SND_PCM_NONBLOCK = 1;
+  SND_PCM_FORMAT_S16_LE = 2;
+  SND_PCM_ACCESS_RW_INTERLEAVED = 3;
+  SND_PCM_STATE_PREPARED = 2;
+
+const
+  ALSA_EINTR = 4;
+  ALSA_EAGAIN = 11;
+  ALSA_EPIPE = 32;
+  ALSA_ESTRPIPE = 86;
+
+type
+  // ALSA uses C long / unsigned long for frames (64 bits on Linux64),
+  // C int for status/enums, and opaque snd_pcm_t pointers.
+  TAlsaApi = record
+    Open: function(out PCM: Pointer; Name: PAnsiChar; Stream, Mode: Integer): Integer; cdecl;
+    Close: function(PCM: Pointer): Integer; cdecl;
+    SetParams: function(PCM: Pointer; Format, Access: Integer; Channels, Rate: Cardinal; SoftResample: Integer; Latency: Cardinal): Integer; cdecl;
+    GetParams: function(PCM: Pointer; out BufferSize, PeriodSize: NativeUInt): Integer; cdecl;
+    AvailDelay: function(PCM: Pointer; out Avail, Delay: NativeInt): Integer; cdecl;
+    AvailUpdate: function(PCM: Pointer): NativeInt; cdecl;
+    WriteInterleaved: function(PCM, Buffer: Pointer; Frames: NativeUInt): NativeInt; cdecl;
+    Prepare: function(PCM: Pointer): Integer; cdecl;
+    Drop: function(PCM: Pointer): Integer; cdecl;
+    State: function(PCM: Pointer): Integer; cdecl;
+    Start: function(PCM: Pointer): Integer; cdecl;
+    StrError: function(Code: Integer): PAnsiChar; cdecl;
+    function Complete: Boolean;
+  end;
+
+function LoadAlsa(out Api: TAlsaApi; out Module: HMODULE; out Error: string): Boolean;
 
 type
   TNesLinuxAudioBackend = class(TInterfacedObject, INesAudioBackend)
@@ -25,6 +62,7 @@ type
     // Native boundary injection for deterministic tests; caller owns Api's library.
     constructor Create(const Api: TAlsaApi; const DeviceName: UTF8String = 'default'); overload;
     destructor Destroy; override;
+  public { INesAudioBackend }
     procedure Clear;
     procedure Submit(const Samples: array of SmallInt; Count: Integer);
     function QueueState: TAudioQueueState;
@@ -40,6 +78,56 @@ const
   MAX_QUEUED_SAMPLES = AUDIO_BLOCK_COUNT * AUDIO_BLOCK_SAMPLES;
   // snd_pcm_set_params takes microseconds, not frames.
   TARGET_LATENCY_US = ( Int64(MAX_QUEUED_SAMPLES) * 1000000 + NES_SAMPLE_RATE - 1) div NES_SAMPLE_RATE;
+
+function TAlsaApi.Complete: Boolean;
+begin
+  Result :=
+    Assigned(Open) and
+    Assigned(Close) and
+    Assigned(SetParams) and
+    Assigned(GetParams) and
+    Assigned(AvailDelay) and
+    Assigned(AvailUpdate) and
+    Assigned(WriteInterleaved) and
+    Assigned(Prepare) and
+    Assigned(Drop) and
+    Assigned(State) and
+    Assigned(Start) and
+    Assigned(StrError);
+end;
+
+function LoadAlsa(out Api: TAlsaApi; out Module: HMODULE; out Error: string): Boolean;
+begin
+  Api := Default(TAlsaApi);
+  Module := 0;
+  Error := '';
+  Module := LoadLibrary(ALSA_LIBRARY);
+  if Module = 0 then
+    Error := 'Cannot load ' + ALSA_LIBRARY + '; install the ALSA runtime library'
+  else
+  begin
+    @Api.Open := GetProcAddress(Module, 'snd_pcm_open');
+    @Api.Close := GetProcAddress(Module, 'snd_pcm_close');
+    @Api.SetParams := GetProcAddress(Module, 'snd_pcm_set_params');
+    @Api.GetParams := GetProcAddress(Module, 'snd_pcm_get_params');
+    @Api.AvailDelay := GetProcAddress(Module, 'snd_pcm_avail_delay');
+    @Api.AvailUpdate := GetProcAddress(Module, 'snd_pcm_avail_update');
+    @Api.WriteInterleaved := GetProcAddress(Module, 'snd_pcm_writei');
+    @Api.Prepare := GetProcAddress(Module, 'snd_pcm_prepare');
+    @Api.Drop := GetProcAddress(Module, 'snd_pcm_drop');
+    @Api.State := GetProcAddress(Module, 'snd_pcm_state');
+    @Api.Start := GetProcAddress(Module, 'snd_pcm_start');
+    @Api.StrError := GetProcAddress(Module, 'snd_strerror');
+    if not Api.Complete then
+    begin
+      Error := 'Missing PCM functions in ' + ALSA_LIBRARY;
+      FreeLibrary(Module);
+      Module := 0;
+      Api := Default(TAlsaApi);
+    end;
+  end;
+  Result := Module <> 0;
+end;
 
 constructor TNesLinuxAudioBackend.Create(const DeviceName: UTF8String);
 begin
@@ -59,11 +147,8 @@ begin
 end;
 
 procedure TNesLinuxAudioBackend.OpenDevice(const DeviceName: UTF8String);
-var
-  Code: Integer;
-  PeriodSize: NativeUInt;
 begin
-  Code := FApi.Open(FDevice, PAnsiChar(DeviceName), SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK);
+  var Code := FApi.Open(FDevice, PAnsiChar(DeviceName), SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK);
   if Code < 0 then
   begin
     FDevice := nil;
@@ -77,6 +162,7 @@ begin
     Fail('configure PCM', Code);
     Exit;
   end;
+  var PeriodSize: NativeUInt;
   Code := FApi.GetParams(FDevice, FBufferSize, PeriodSize);
   if Code < 0 then
     Fail('read buffer size', Code)
@@ -90,10 +176,8 @@ end;
 destructor TNesLinuxAudioBackend.Destroy;
 begin
   CloseDevice;
-{$IF Defined(LINUX) and not Defined(ANDROID)}
   if FModule <> 0 then
     FreeLibrary(FModule);
-{$ENDIF}
   inherited;
 end;
 
@@ -134,12 +218,10 @@ begin
 end;
 
 procedure TNesLinuxAudioBackend.Clear;
-var
-  Code: Integer;
 begin
   if FDevice = nil then
     Exit;
-  Code := FApi.Drop(FDevice);
+  var Code := FApi.Drop(FDevice);
   if Code >= 0 then
     Code := FApi.Prepare(FDevice);
   if Code < 0 then
@@ -154,7 +236,6 @@ end;
 function TNesLinuxAudioBackend.ReadQueue(out Queued, Delay: NativeInt): Boolean;
 var
   Available: NativeInt;
-  Code: Integer;
 
   function Query: Integer;
   begin
@@ -178,7 +259,7 @@ begin
   Delay := 0;
   if FDevice = nil then
     Exit;
-  Code := Query;
+  var Code := Query;
   if (Code < 0) and Recover(Code) then
     Code := Query;
   if Code < 0 then
@@ -195,14 +276,12 @@ begin
 end;
 
 procedure TNesLinuxAudioBackend.Submit(const Samples: array of SmallInt; Count: Integer);
-var
-  Queued, Delay, Written: NativeInt;
-  ToWrite, Code: Integer;
 begin
   if (Count < 0) or (Count > Length(Samples)) or (Count > AUDIO_BLOCK_SAMPLES) then
     raise EArgumentOutOfRangeException.Create('Invalid audio sample count');
   if Count = 0 then
     Exit;
+  var Queued, Delay: NativeInt;
   if not ReadQueue(Queued, Delay) then
   begin
     Inc(FDropped, Count);
@@ -210,9 +289,8 @@ begin
   end;
   // Some plugins negotiate larger native buffers. Still bound our queued PCM
   // to 4096 samples. No software backlog, waits or spin on EAGAIN/short writes.
-  ToWrite := Min(Count, Integer(Max(NativeInt(0),
-        Min(NativeInt(FBufferSize), NativeInt(MAX_QUEUED_SAMPLES)) - Queued)));
-  Written := 0;
+  var ToWrite := Min(Count, Integer(Max(NativeInt(0), Min(NativeInt(FBufferSize), NativeInt(MAX_QUEUED_SAMPLES)) - Queued)));
+  var Written: NativeInt := 0;
   if ToWrite > 0 then
   begin
     Written := FApi.WriteInterleaved(FDevice, @Samples[0], ToWrite);
@@ -234,7 +312,7 @@ begin
     (FEpochSubmitted >= Min(FBufferSize, NativeUInt(2 * AUDIO_BLOCK_SAMPLES))) and
     (FApi.State(FDevice) = SND_PCM_STATE_PREPARED) then
   begin
-    Code := FApi.Start(FDevice);
+    var Code := FApi.Start(FDevice);
     if Code < 0 then
       Recover(Code);
   end;

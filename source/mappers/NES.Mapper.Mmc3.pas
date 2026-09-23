@@ -1,9 +1,9 @@
-﻿unit NES.Mapper.Mmc3;
+unit NES.Mapper.Mmc3;
 
 interface
 
 uses
-  NES.Types, NES.Mapper;
+  NES.State, NES.Types, NES.Mapper;
 
 type
   // Standard MMC3B/C. MMC6 and mapper-4 submapper variants are not implemented.
@@ -19,6 +19,9 @@ type
     FA12LowSince: UInt64;
     function GetChrOffset(Address: UInt16): Integer;
   public
+    procedure SerializeState(State: TNesStateArchive); override;
+    function GetSaveMemory: TByteArray; override;
+    procedure SetSaveMemory(const Data: TByteArray); override;
     constructor Create(const APrgRom, AChrData: TByteArray; AHasChrRam: Boolean; AMirrorMode: TMirrorMode);
     function CpuRead(Address: UInt16; out Value: UInt8): Boolean; override;
     function CpuWrite(Address: UInt16; Value: UInt8): Boolean; override;
@@ -32,6 +35,41 @@ type
 
 implementation
 
+procedure TMapperMmc3.SerializeState(State: TNesStateArchive);
+begin
+  inherited;
+  if Length(FChrMemory) > 0 then
+    State.Field(FChrMemory[0], Length(FChrMemory) * SizeOf(FChrMemory[0]));
+  State.Field(FPrgRam, SizeOf(FPrgRam));
+  State.Field(FHasChrRam, SizeOf(FHasChrRam));
+  State.Field(FFourScreenMirroring, SizeOf(FFourScreenMirroring));
+  State.Field(FInitialMirrorMode, SizeOf(FInitialMirrorMode));
+  State.Field(FMirrorMode, SizeOf(FMirrorMode));
+  State.Field(FBankRegisters, SizeOf(FBankRegisters));
+  State.Field(FBankSelect, SizeOf(FBankSelect));
+  State.Field(FPrgRamControl, SizeOf(FPrgRamControl));
+  State.Field(FIrqLatch, SizeOf(FIrqLatch));
+  State.Field(FIrqCounter, SizeOf(FIrqCounter));
+  State.Field(FIrqReloadPending, SizeOf(FIrqReloadPending));
+  State.Field(FIrqEnabled, SizeOf(FIrqEnabled));
+  State.Field(FIrqPending, SizeOf(FIrqPending));
+  State.Field(FA12High, SizeOf(FA12High));
+  State.Field(FA12LowSince, SizeOf(FA12LowSince));
+end;
+
+function TMapperMmc3.GetSaveMemory: TByteArray;
+begin
+  SetLength(Result, SizeOf(FPrgRam));
+  Move(FPrgRam[0], Result[0], Length(Result));
+end;
+
+procedure TMapperMmc3.SetSaveMemory(const Data: TByteArray);
+begin
+  if Length(Data) <> SizeOf(FPrgRam) then
+    raise ENesException.Create('Invalid cartridge save size');
+  Move(Data[0], FPrgRam[0], Length(Data));
+end;
+
 constructor TMapperMmc3.Create(const APrgRom, AChrData: TByteArray; AHasChrRam: Boolean; AMirrorMode: TMirrorMode);
 begin
   inherited Create;
@@ -42,7 +80,7 @@ begin
   if Length(FChrMemory) = 0 then
     SetLength(FChrMemory, $2000);
   FInitialMirrorMode := AMirrorMode;
-  FFourScreenMirroring := AMirrorMode = mmFourScreen;
+  FFourScreenMirroring := AMirrorMode = TMirrorMode.FourScreen;
   Reset;
 end;
 
@@ -120,9 +158,9 @@ begin
     $A000:
       if not FFourScreenMirroring then
         if (Value and 1) = 0 then
-          FMirrorMode := mmVertical
+          FMirrorMode := TMirrorMode.Vertical
         else
-          FMirrorMode := mmHorizontal;
+          FMirrorMode := TMirrorMode.Horizontal;
     $A001:
       FPrgRamControl := Value;
     $C000:

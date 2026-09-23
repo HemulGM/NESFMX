@@ -1,14 +1,16 @@
-﻿unit NES.Cartridge;
+unit NES.Cartridge;
 
 interface
 
 uses
   System.Classes, System.SysUtils, NES.Types, NES.Mapper;
 
-type
-  TRomFormat = (rfUnknown, rfINes, rfNes20);
+{$SCOPEDENUMS ON}
 
-  TRomTiming = (rtUnknown, rtNtsc, rtPal, rtMultiRegion, rtDendy);
+type
+  TRomFormat = (Unknown, INES, NES20);
+
+  TRomTiming = (Unknown, NTSC, PAL, MultiRegion, Dendy);
 
   TCartridgeMetadata = record
     Format: TRomFormat;
@@ -30,10 +32,18 @@ type
     FHeaderMapperId: Integer;
     FValid: Boolean;
     FMetadata: TCartridgeMetadata;
+    FRomIdentity, FSaveFileName: string;
+    FRomFileName: string;
+    FSaveSize: Integer;
+    FLastSaveMemory: TByteArray;
   public
     destructor Destroy; override;
     procedure LoadFromFile(const FileName: string);
     procedure Reset;
+    procedure LoadBattery(const DirectoryName: string);
+    procedure SaveBattery;
+    property RomIdentity: string read FRomIdentity;
+    property SaveFileName: string read FSaveFileName;
     property Mapper: TMapper read FMapper;
     property MapperId: Integer read FMapperId;
     property HeaderMapperId: Integer read FHeaderMapperId;
@@ -44,7 +54,10 @@ type
 implementation
 
 uses
-  NES.RomMetadata, NES.Mapper.Factory;
+  NES.RomMetadata, NES.Mapper.Factory, NES.SavePaths, System.Hash,
+  System.IOUtils
+  {$IFDEF MSWINDOWS}, Winapi.Windows{$ENDIF}
+  {$IFDEF POSIX}, Posix.Stdio, Posix.Unistd{$ENDIF};
 
 type
   TInesHeader = packed record
@@ -86,21 +99,21 @@ end;
 function ParseMetadata(const Header: TInesHeader): TCartridgeMetadata;
 begin
   Result := Default(TCartridgeMetadata);
-  Result.Format := rfINes;
+  Result.Format := TRomFormat.INes;
   Result.HasBattery := (Header.Flags6 and 2) <> 0;
   Result.HasTrainer := (Header.Flags6 and 4) <> 0;
   if (Header.Flags6 and 8) <> 0 then
-    Result.MirrorMode := mmFourScreen
+    Result.MirrorMode := TMirrorMode.FourScreen
   else if (Header.Flags6 and 1) <> 0 then
-    Result.MirrorMode := mmVertical
+    Result.MirrorMode := TMirrorMode.Vertical
   else
-    Result.MirrorMode := mmHorizontal;
+    Result.MirrorMode := TMirrorMode.Horizontal;
   Result.MapperId := (Header.Flags7 and $F0) or (Header.Flags6 shr 4);
   Result.PrgRomSize := UInt64(Header.PrgRomChunks) * $4000;
   Result.ChrRomSize := UInt64(Header.ChrRomChunks) * $2000;
   if (Header.Flags7 and $0C) = $08 then
   begin
-    Result.Format := rfNes20;
+    Result.Format := TRomFormat.Nes20;
     Result.MapperId := Result.MapperId or ((Header.PrgRamSize and $0F) shl 8);
     Result.Submapper := Header.PrgRamSize shr 4;
     Result.PrgRomSize := RomSize(Header.PrgRomChunks, Header.Flags9 and $0F, $4000);
@@ -149,7 +162,7 @@ function ReadRomTitle(Stream: TFileStream; const Metadata: TCartridgeMetadata): 
 begin
   Result := '';
   // NES 2.0 trailing data may contain miscellaneous ROMs, not a title.
-  if Metadata.Format <> rfINes then
+  if Metadata.Format <> TRomFormat.INes then
     Exit;
   var Remaining := Stream.Size - Stream.Position;
   if Metadata.ConsoleType = 2 then
@@ -188,21 +201,26 @@ end;
 
 procedure TCartridge.LoadFromFile(const FileName: string);
 begin
-  var Header: TInesHeader;
-  var PrgRom: TByteArray;
-  var ChrRom: TByteArray;
-  var Trainer: TByteArray;
-  var Mirror: TMirrorMode;
-  var HasTrainer: Boolean;
-  var ChrRam: Boolean;
+  SaveBattery;
+  FSaveFileName := '';
+  FLastSaveMemory := nil;
+  FSaveSize := 0;
   FreeAndNil(FMapper);
   FValid := False;
   FMapperId := -1;
   FHeaderMapperId := -1;
   FMetadata := Default(TCartridgeMetadata);
+  FRomFileName := FileName;
 
   var Stream: TFileStream := TFileStream.Create(FileName, fmOpenRead or fmShareDenyWrite);
   try
+    var Header: TInesHeader;
+    var PrgRom: TByteArray;
+    var ChrRom: TByteArray;
+    var Trainer: TByteArray;
+    var Mirror: TMirrorMode;
+    var HasTrainer: Boolean;
+    var ChrRam: Boolean;
     ReadExact(Stream, Header, SizeOf(Header));
     if (Header.Magic[0] <> 'N') or (Header.Magic[1] <> 'E') or (Header.Magic[2] <> 'S') or (Ord(Header.Magic[3]) <> $1A) then
       raise ENesException.Create('Invalid iNES file');
@@ -241,10 +259,27 @@ begin
     if Length(ChrRom) > 0 then
       ReadExact(Stream, ChrRom[0], Length(ChrRom));
 
+    var Hash := THashSHA1.Create;
+    Hash.Update(PrgRom[0], Length(PrgRom));
+    if Length(ChrRom) > 0 then
+      Hash.Update(ChrRom[0], Length(ChrRom));
+    FRomIdentity := LowerCase(Hash.HashAsString);
+    if FMetadata.Format = TRomFormat.INes then
+      FMetadata.HasBattery := FMetadata.HasBattery or IsLegacyBatteryRom(FRomIdentity);
+
     FMetadata.Title := ReadRomTitle(Stream, FMetadata);
     // Preserve explicit NES 2.0 metadata; legacy corrections require exact payload identity.
     if (Header.Flags7 and $0C) <> $08 then
+    begin
       FMapperId := ResolveLegacyMapper(FMapperId, PrgRom, ChrRom);
+      if FMapperId = MAPPER_UXROM then
+      begin
+        Mirror := ResolveLegacyMirror(Mirror, PrgRom, ChrRom);
+        FMetadata.MirrorMode := Mirror;
+      end;
+      if (FMapperId = MAPPER_UXROM) and IsLegacyPalRom(PrgRom, ChrRom) then
+        FMetadata.Timing := TRomTiming.PAL;
+    end;
     FMapper := CreateMapper(FMapperId, PrgRom, ChrRom, ChrRam, Mirror, (Header.Flags7 and $0C) <> $08);
     if FMapper = nil then
       raise ENesException.CreateFmt('Unsupported mapper: %d', [FMapperId]);
@@ -252,6 +287,92 @@ begin
     FValid := True;
   finally
     Stream.Free;
+  end;
+end;
+
+procedure TCartridge.LoadBattery(const DirectoryName: string);
+begin
+  // Activation is explicit: validating a replacement ROM must not load a stale
+  // save while the previous emulation session is still running.
+  if not FValid or not FMetadata.HasBattery or (DirectoryName = '') then
+    Exit;
+  if FSaveFileName <> '' then
+    Exit;
+  var Memory := FMapper.GetSaveMemory;
+  FSaveSize := Length(Memory);
+  if FMetadata.Format = TRomFormat.Nes20 then
+  begin
+    if (FMetadata.ChrNvRamSize <> 0) or
+      ((FMetadata.PrgRamSize <> 0) and (FMetadata.PrgNvRamSize <> 0)) or
+      (FMetadata.PrgNvRamSize > UInt64(FSaveSize)) then
+      raise ENesException.Create('Unsupported NES 2.0 persistent memory layout');
+    FSaveSize := Integer(FMetadata.PrgNvRamSize);
+  end;
+  // Some legacy headers set the battery bit on boards with no writable memory.
+  if FSaveSize = 0 then
+    Exit;
+  var Path := ResolveGameSavePath(DirectoryName, FRomFileName, FRomIdentity, '.sav');
+  if TFile.Exists(Path) then
+  begin
+    var Stream := TFileStream.Create(Path, fmOpenRead or fmShareDenyWrite);
+    try
+      if Stream.Size <> FSaveSize then
+        raise ENesException.CreateFmt('Invalid save size: %s (expected %d bytes)', [Path, FSaveSize]);
+      ReadExact(Stream, Memory[0], FSaveSize);
+    finally
+      Stream.Free;
+    end;
+    FMapper.SetSaveMemory(Memory);
+  end;
+  FLastSaveMemory := Copy(Memory, 0, FSaveSize);
+  // A failed read never arms saving, so a damaged save cannot be overwritten.
+  FSaveFileName := Path;
+end;
+
+procedure TCartridge.SaveBattery;
+begin
+  if (FSaveFileName = '') or not FValid then
+    Exit;
+  var Memory := FMapper.GetSaveMemory;
+  if Length(Memory) < FSaveSize then
+    raise ENesException.Create('Cartridge persistent memory size changed');
+  if CompareMem(@Memory[0], @FLastSaveMemory[0], FSaveSize) then
+    Exit;
+  ForceDirectories(ExtractFilePath(FSaveFileName));
+  var Id: TGUID;
+  CreateGUID(Id);
+  var Temporary := FSaveFileName + '.' + GUIDToString(Id) + '.tmp';
+  try
+    var Stream := TFileStream.Create(Temporary, fmCreate);
+    try
+      Stream.WriteBuffer(Memory[0], FSaveSize);
+      {$IFDEF MSWINDOWS}
+      if not FlushFileBuffers(Stream.Handle) then
+        RaiseLastOSError;
+      {$ENDIF}
+      {$IFDEF POSIX}
+      if fsync(Stream.Handle) <> 0 then
+        RaiseLastOSError;
+      {$ENDIF}
+    finally
+      Stream.Free;
+    end;
+    // Same-directory replacement: never delete the previous save first.
+    {$IFDEF MSWINDOWS}
+    if not MoveFileEx(PChar(Temporary), PChar(FSaveFileName),
+      MOVEFILE_REPLACE_EXISTING or MOVEFILE_WRITE_THROUGH) then
+      RaiseLastOSError;
+    {$ENDIF}
+    {$IFDEF POSIX}
+    var SourcePath := UTF8String(Temporary);
+    var TargetPath := UTF8String(FSaveFileName);
+    if Posix.Stdio.__rename(PAnsiChar(SourcePath), PAnsiChar(TargetPath)) <> 0 then
+      RaiseLastOSError;
+    {$ENDIF}
+    FLastSaveMemory := Copy(Memory, 0, FSaveSize);
+  finally
+    if TFile.Exists(Temporary) then
+      TFile.Delete(Temporary);
   end;
 end;
 

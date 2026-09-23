@@ -1,9 +1,11 @@
-﻿unit NES.Mapper;
+unit NES.Mapper;
 
 interface
 
 uses
-  NES.Types;
+  NES.State, NES.Types;
+
+{$SCOPEDENUMS ON}
 
 const
   MAPPER_NROM = 0;
@@ -56,12 +58,16 @@ const
   MAPPER_MMC3_250 = 250;
 
 type
-  TMirrorMode = (mmHorizontal, mmVertical, mmSingle0, mmSingle1, mmFourScreen);
+  TMirrorMode = (Horizontal, Vertical, Single0, Single1, FourScreen);
 
   TMapper = class
   protected
     class procedure ValidateMemory(const PrgRom, ChrData: TByteArray); static;
   public
+    procedure SerializeState(State: TNesStateArchive); virtual;
+    // Physical cartridge memory, independent of CPU banking / write protection.
+    function GetSaveMemory: TByteArray; virtual;
+    procedure SetSaveMemory(const Data: TByteArray); virtual;
     function CpuRead(Address: UInt16; out Value: UInt8): Boolean; virtual; abstract;
     function CpuWrite(Address: UInt16; Value: UInt8): Boolean; virtual; abstract;
     function CpuWriteTimed(Address: UInt16; Value: UInt8; CpuCycle: UInt64): Boolean; virtual;
@@ -80,6 +86,21 @@ type
   end;
 
 implementation
+
+procedure TMapper.SerializeState(State: TNesStateArchive);
+begin
+end;
+
+function TMapper.GetSaveMemory: TByteArray;
+begin
+  Result := nil;
+end;
+
+procedure TMapper.SetSaveMemory(const Data: TByteArray);
+begin
+  if Length(Data) <> 0 then
+    raise ENesException.Create('This mapper has no persistent memory');
+end;
 
 procedure TMapper.ClockCpu;
 begin
@@ -128,3 +149,4 @@ begin
 end;
 
 end.
+

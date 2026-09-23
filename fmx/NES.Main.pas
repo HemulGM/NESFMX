@@ -23,6 +23,7 @@ type
     Keys3: TKeyMap;
     Keys4: TKeyMap;
     FourScore: Boolean;
+    Region: TRegionOverride;
   end;
 
   TFormMain = class(TForm)
@@ -64,6 +65,8 @@ type
     procedure StopOnError;
     procedure UpdateFrame;
   public
+    procedure SaveSnapshot(const Name: string);
+    procedure LoadSnapshot(const Name: string);
     procedure LoadRom(const FileName: string; const DisplayName: string = '');
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -192,6 +195,7 @@ begin
   Result.Keys4.Left := vkNumpad4;
   Result.Keys4.Right := vkNumpad6;
   Result.FourScore := True;
+  Result.Region := TRegionOverride.Auto;
 end;
 
 procedure WriteKeyMap(Ini: TIniFile; const Section: string; const Keys: TKeyMap);
@@ -212,6 +216,14 @@ begin
   try
     Ini.WriteInteger('Video', 'Scale', Config.Scale);
     Ini.WriteString('Video', 'Filter', Config.Filter);
+    case Config.Region of
+      TRegionOverride.NTSC:
+        Ini.WriteString('Video', 'Region', 'NTSC');
+      TRegionOverride.PAL:
+        Ini.WriteString('Video', 'Region', 'PAL');
+    else
+      Ini.WriteString('Video', 'Region', 'Auto');
+    end;
     Ini.WriteBool('Input', 'FourScore', Config.FourScore);
     WriteKeyMap(Ini, 'Controls', Config.Keys);
     WriteKeyMap(Ini, 'Controls2', Config.Keys2);
@@ -257,6 +269,11 @@ begin
     Result.Filter := Trim(Ini.ReadString('Video', 'Filter', Defaults.Filter));
     if Result.Filter = '' then
       Result.Filter := Defaults.Filter;
+    var Region := Trim(Ini.ReadString('Video', 'Region', 'Auto'));
+    if SameText(Region, 'PAL') then
+      Result.Region := TRegionOverride.PAL
+    else if SameText(Region, 'NTSC') then
+      Result.Region := TRegionOverride.NTSC;
 
     Result.FourScore := Ini.ReadBool('Input', 'FourScore', Defaults.FourScore);
     Result.Keys := ReadKeyMap(Ini, 'Controls', Defaults.Keys);
@@ -330,6 +347,12 @@ begin
   FreeAndNil(FAppEvents);
   FreeAndNil(FPicker);
   {$ENDIF}
+  if FEmulation <> nil then
+  try
+    FEmulation.StopAndSave;
+  except
+    Application.HandleException(Self);
+  end;
   FreeAndNil(FEmulation);
   inherited;
 end;
@@ -439,6 +462,23 @@ begin
     FEmulation.ClearInput;
 end;
 
+procedure TFormMain.SaveSnapshot(const Name: string);
+begin
+  if FEmulation = nil then
+    raise ENesException.Create('No game loaded');
+  FEmulation.SaveSnapshot(Name);
+end;
+
+procedure TFormMain.LoadSnapshot(const Name: string);
+begin
+  if FEmulation = nil then
+    raise ENesException.Create('No game loaded');
+  FEmulation.LoadSnapshot(Name);
+  FEmulationFaulted := False;
+  SyncActivity;
+  UpdateFrame;
+end;
+
 procedure TFormMain.FormKeyDown(Sender: TObject; var Key: Word; var KeyChar: WideChar; Shift: TShiftState);
 begin
   {$IFDEF ANDROID}
@@ -476,24 +516,16 @@ begin
         raise;
       end;
     end
-    else if (Code = vkF5) and (FEmulation <> nil) then
+    else if (Code in [vkF5, vkF6]) and (FEmulation <> nil) then
     begin
-      UpdateFrame;
-      ImageCanvas.Bitmap.SaveToFile(TPath.Combine(TPath.GetDocumentsPath,
-          'screenshot_' + FormatDateTime('yyyymmdd_hhnnss_zzz', Now) + '.png'));
-    end
-    else if (Code = vkF6) and (FEmulation <> nil) then
-    begin
-      var DiagnosticPath := TPath.Combine(TPath.GetDocumentsPath,
-        'NES-audio-' + FormatDateTime('yyyymmdd_hhnnss_zzz', Now));
-      FormDeactivate(Self);
       try
-        FEmulation.SaveDiagnostics(DiagnosticPath);
-        UpdateFrame;
-        ImageCanvas.Bitmap.SaveToFile(DiagnosticPath + '.png');
-        ShowMessage('Audio diagnostics saved: ' + DiagnosticPath + '.csv');
-      finally
-        FormActivate(Self);
+        if Code = vkF5 then
+          SaveSnapshot('quick')
+        else
+          LoadSnapshot('quick');
+      except
+        on E: Exception do
+          ShowMessage('Snapshot: ' + E.Message);
       end;
     end;
   end;
@@ -558,7 +590,14 @@ end;
 procedure TFormMain.LoadRom(const FileName: string; const DisplayName: string);
 begin
   // Validate first: an invalid ROM leaves the current worker running.
-  var NewEmulation := TNesEmulationThread.Create(FileName, FConfig.FourScore);
+  var NewEmulation := TNesEmulationThread.Create(FileName, FConfig.FourScore, FConfig.Region);
+  try
+    if FEmulation <> nil then
+      FEmulation.StopAndSave;
+  except
+    NewEmulation.Free;
+    raise;
+  end;
   if FGamepad <> nil then
     FGamepad.ReleaseAll;
   TimerUpdate.Enabled := False;
@@ -632,8 +671,11 @@ begin
   end;
   if not FEmulationFaulted and (Status.FramesPerSecond > 0) then
   begin
-    var NewCaption := Format('NESFMX - %.1f FPS - %s',
-      [Status.FramesPerSecond, FRomDisplayName]);
+    var RegionName := 'NTSC';
+    if Status.Region = TNesRegion.PAL then
+      RegionName := 'PAL';
+    var NewCaption := Format('NESFMX - %s - %.1f FPS - %s',
+      [RegionName, Status.FramesPerSecond, FRomDisplayName]);
     if Status.AudioError <> '' then
       NewCaption := NewCaption + ' - sound unavailable';
     if Caption <> NewCaption then

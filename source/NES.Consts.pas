@@ -7,6 +7,7 @@ uses
 
 const
   NES_CPU_HZ = 1789773;
+  NES_PAL_CPU_HZ = 1662607;
   NES_WIDTH = 256;
   NES_HEIGHT = 240;
   NES_FRAME_CYCLES = 89342;
@@ -21,7 +22,27 @@ const
     $FFE4E594, $FFCFEF96, $FFBDF4AB, $FFB3F3CC, $FFB5EBF2, $FFB8B8B8, $FF000000, $FF000000
   );
 
+function CpuFrequency(Region: TNesRegion): Integer; inline;
+
+function FrameRate(Region: TNesRegion): Double; inline;
+
 implementation
+
+function CpuFrequency(Region: TNesRegion): Integer;
+begin
+  if Region = TNesRegion.PAL then
+    Result := NES_PAL_CPU_HZ
+  else
+    Result := NES_CPU_HZ;
+end;
+
+function FrameRate(Region: TNesRegion): Double;
+begin
+  if Region = TNesRegion.PAL then
+    Result := NES_PAL_CPU_HZ * 16.0 / (5.0 * 312 * 341)
+  else
+    Result := NES_CPU_HZ * 3.0 / (NES_FRAME_CYCLES - 0.5);
+end;
 
 end.
 
