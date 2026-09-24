@@ -9,18 +9,22 @@ uses
   NES.RomPicker.Android in 'NES.RomPicker.Android.pas',
   {$ENDIF }
   {$IF Defined(ANDROID) and not Defined(NES_AUDIO_NULL)}
-  NES.Audio.Android.AudioTrack in '..\source\NES.Audio.Android.AudioTrack.pas',
+  PCM.Audio.Android.AudioTrack in '..\source\PCM\PCM.Audio.Android.AudioTrack.pas',
   {$ENDIF }
   {$IF Defined(MSWINDOWS) and not Defined(NES_AUDIO_NULL)}
-  NES.Audio.Windows.MMSystem in '..\source\NES.Audio.Windows.MMSystem.pas',
+  PCM.Audio.Windows.MMSystem in '..\source\PCM\PCM.Audio.Windows.MMSystem.pas',
   {$ENDIF }
   {$IF Defined(LINUX) and not Defined(ANDROID) and not Defined(NES_AUDIO_NULL)}
-  NES.Audio.Linux.Alsa in '..\source\NES.Audio.Linux.Alsa.pas',
+  PCM.Audio.Linux.Alsa in '..\source\PCM\PCM.Audio.Linux.Alsa.pas',
   {$ENDIF }
-  NES.Mapper in '..\source\NES.Mapper.pas',
   {$IF (Defined(MACOS) or Defined(IOS)) and not Defined(NES_AUDIO_NULL)}
-  NES.Audio.Apple.AudioQueue in '..\source\NES.Audio.Apple.AudioQueue.pas',
+  PCM.Audio.Apple.AudioQueue in '..\source\PCM\PCM.Audio.Apple.AudioQueue.pas',
   {$ENDIF }
+  PCM.Audio.Null in '..\source\PCM\PCM.Audio.Null.pas',
+  PCM.Audio.Factory in '..\source\PCM\PCM.Audio.Factory.pas',
+  PCM.Audio in '..\source\PCM\PCM.Audio.pas',
+  PCM.Audio.Backend in '..\source\PCM\PCM.Audio.Backend.pas',
+  NES.Mapper in '..\source\NES.Mapper.pas',
   NES.Mapper.Factory in '..\source\NES.Mapper.Factory.pas',
   NES.Mapper.ColorDreams in '..\source\mappers\NES.Mapper.ColorDreams.pas',
   NES.Mapper.Banked in '..\source\mappers\NES.Mapper.Banked.pas',
@@ -46,10 +50,6 @@ uses
   NES.SavePaths in '..\source\NES.SavePaths.pas',
   NES.Types in '..\source\NES.Types.pas',
   NES.APU in '..\source\NES.APU.pas',
-  NES.Audio in '..\source\NES.Audio.pas',
-  NES.Audio.Backend in '..\source\NES.Audio.Backend.pas',
-  NES.Audio.Factory in '..\source\NES.Audio.Factory.pas',
-  NES.Audio.Null in '..\source\NES.Audio.Null.pas',
   NES.AudioDiagnostics in '..\source\NES.AudioDiagnostics.pas',
   NES.Emulation in '..\source\NES.Emulation.pas',
   NES.Bus in '..\source\NES.Bus.pas',

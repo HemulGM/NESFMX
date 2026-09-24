@@ -4,14 +4,19 @@ interface
 
 uses
   System.Classes, System.SysUtils, System.SyncObjs, NES.Types, NES.Console,
-  NES.Input, NES.Audio, NES.AudioDiagnostics, NES.Controller;
+  NES.Input, PCM.Audio, NES.AudioDiagnostics, NES.Controller;
+
+const
+  NES_SAMPLE_RATE = 44100;
+  AUDIO_BLOCK_SAMPLES = 1024;
+  AUDIO_BLOCK_COUNT = 4;
 
 type
   TEmulationStatus = record
     Region: TNesRegion;
     FrameNumber: UInt64;
     FramesPerSecond: Double;
-    AudioQueue: TAudioQueueState;
+    AudioQueue: TPCMAudioQueueState;
     AudioError, Error: string;
   end;
 
@@ -20,7 +25,8 @@ type
   TNesEmulationThread = class(TThread)
   private
     FConsole: TNesConsole;
-    FAudio: TNesAudio;
+    FAudio: TPCMAudio;
+    FAudioFormat: TPCMAudioFormat;
     FDiagnostics: TAudioDiagnostics;
     FInput: TNesInput;
     FLock: TCriticalSection;
@@ -212,7 +218,11 @@ begin
   FSnapshotDone := TEvent.Create(nil, True, False, '');
   FWake := TEvent.Create(nil, False, False, '');
   FInput := TNesInput.Create;
-  FDiagnostics := TAudioDiagnostics.Create;
+  FAudioFormat.SampleRate := NES_SAMPLE_RATE;
+  FAudioFormat.Channels := 1;
+  FAudioFormat.BlockFrames := AUDIO_BLOCK_SAMPLES;
+  FAudioFormat.BlockCount := AUDIO_BLOCK_COUNT;
+  FDiagnostics := TAudioDiagnostics.Create(FAudioFormat);
   FRomPath := FileName;
   FSaveDirectory := SaveDirectory;
   if FSaveDirectory = '' then
@@ -492,7 +502,7 @@ begin
     FConsole.LoadBattery(FSaveDirectory);
     try
       // Native backends may require initialization and teardown on the same thread.
-      FAudio := TNesAudio.Create;
+      FAudio := TPCMAudio.Create(FAudioFormat);
       try
         FLock.Enter;
         try
@@ -523,7 +533,8 @@ end;
 
 procedure TNesEmulationThread.RunEmulation;
 begin
-  var Samples: array[0..AUDIO_BLOCK_SAMPLES - 1] of SmallInt;
+  var Samples: TArray<SmallInt>;
+  SetLength(Samples, FAudioFormat.BlockFrames);
   var FramePeriod := Round(TStopwatch.Frequency / FrameRate(FConsole.Region));
   var NextFrame := TStopwatch.GetTimeStamp;
   var FpsStart := NextFrame;

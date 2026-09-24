@@ -3,7 +3,7 @@ unit NES.AudioDiagnostics;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Diagnostics, NES.Console, NES.Audio;
+  System.SysUtils, System.Classes, System.Diagnostics, NES.Console, PCM.Audio;
 
 const
   AUDIO_DIAGNOSTIC_FRAMES = 1800;
@@ -16,30 +16,39 @@ type
     P1Length, P2Length, TriLength, NoiseLength, TriLinear: Integer;
     P1Reg0, P2Reg0, TriReg0, NoiseReg0, DmcLevel: Integer;
     Writes: UInt64;
-    Queue: TAudioQueueState;
+    Queue: TPCMAudioQueueState;
     Count: Integer;
-    Samples: array[0..AUDIO_BLOCK_SAMPLES - 1] of SmallInt;
+    Samples: TArray<SmallInt>;
   end;
 
   TAudioDiagnostics = class
   private
     FFrames: TArray<TAudioDiagnosticFrame>;
     FNext, FCount: Integer;
+    FSampleRate: Integer;
+    FBlockFrames: Integer;
   public
-    constructor Create;
+    constructor Create(const AudioFormat: TPCMAudioFormat);
     procedure Clear;
     function Clone: TAudioDiagnostics;
-    procedure Capture(Console: TNesConsole; Audio: TNesAudio; const Samples: array of SmallInt; Count: Integer);
+    procedure Capture(Console: TNesConsole; Audio: TPCMAudio; const Samples: array of SmallInt; Count: Integer);
     procedure Save(const Prefix, RomPath, AudioError: string);
     property Count: Integer read FCount;
   end;
 
 implementation
 
-constructor TAudioDiagnostics.Create;
+constructor TAudioDiagnostics.Create(const AudioFormat: TPCMAudioFormat);
 begin
   inherited Create;
+  if (AudioFormat.SampleRate <= 0) or (AudioFormat.Channels <> 1) or
+    (AudioFormat.BlockFrames <= 0) then
+    raise EArgumentException.Create('Audio diagnostics requires a mono PCM format with a positive sample rate and block size');
+  FSampleRate := AudioFormat.SampleRate;
+  FBlockFrames := AudioFormat.BlockFrames;
   SetLength(FFrames, AUDIO_DIAGNOSTIC_FRAMES);
+  for var i := 0 to High(FFrames) do
+    SetLength(FFrames[i].Samples, FBlockFrames);
 end;
 
 procedure TAudioDiagnostics.Clear;
@@ -50,9 +59,17 @@ end;
 
 function TAudioDiagnostics.Clone: TAudioDiagnostics;
 begin
-  Result := TAudioDiagnostics.Create;
+  var AudioFormat := Default(TPCMAudioFormat);
+  AudioFormat.SampleRate := FSampleRate;
+  AudioFormat.Channels := 1;
+  AudioFormat.BlockFrames := FBlockFrames;
+  Result := TAudioDiagnostics.Create(AudioFormat);
   try
+    Result.FSampleRate := FSampleRate;
+    Result.FBlockFrames := FBlockFrames;
     Result.FFrames := Copy(FFrames);
+    for var i := 0 to High(Result.FFrames) do
+      Result.FFrames[i].Samples := Copy(FFrames[i].Samples);
     Result.FNext := FNext;
     Result.FCount := FCount;
   except
@@ -61,9 +78,9 @@ begin
   end;
 end;
 
-procedure TAudioDiagnostics.Capture(Console: TNesConsole; Audio: TNesAudio; const Samples: array of SmallInt; Count: Integer);
+procedure TAudioDiagnostics.Capture(Console: TNesConsole; Audio: TPCMAudio; const Samples: array of SmallInt; Count: Integer);
 begin
-  if (Count < 0) or (Count > Length(Samples)) or (Count > AUDIO_BLOCK_SAMPLES) then
+  if (Count < 0) or (Count > Length(Samples)) or (Count > FBlockFrames) then
     raise EArgumentOutOfRangeException.Create('Diagnostic audio block is too large');
   var Frame: ^TAudioDiagnosticFrame := @FFrames[FNext];
   Frame.Ticks := TStopwatch.GetTimeStamp;
@@ -128,9 +145,9 @@ begin
       HeaderWord := 1;
       Wave.WriteBuffer(HeaderWord, 2);
       Wave.WriteBuffer(HeaderWord, 2);
-      ChunkSize := NES_SAMPLE_RATE;
+      ChunkSize := FSampleRate;
       Wave.WriteBuffer(ChunkSize, 4);
-      ChunkSize := NES_SAMPLE_RATE * 2;
+      ChunkSize := FSampleRate * 2;
       Wave.WriteBuffer(ChunkSize, 4);
       HeaderWord := 2;
       Wave.WriteBuffer(HeaderWord, 2);

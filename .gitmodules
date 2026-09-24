@@ -1,0 +1,6 @@
+[submodule "PCM"]
+	path = PCM
+	url = https://github.com/HemulGM/PCMAudio
+[submodule "source/PCM"]
+	path = source/PCM
+	url = https://github.com/HemulGM/PCMAudio

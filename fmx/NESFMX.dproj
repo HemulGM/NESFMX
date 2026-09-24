@@ -5,10 +5,11 @@
         <FrameworkType>FMX</FrameworkType>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Release</Config>
-        <Platform Condition="'$(Platform)'==''">Linux64</Platform>
+        <Platform Condition="'$(Platform)'==''">Win64</Platform>
         <TargetedPlatforms>2790547</TargetedPlatforms>
         <AppType>Application</AppType>
         <MainSource>NESFMX.dpr</MainSource>
+        <ProjectName Condition="'$(ProjectName)'==''">NESFMX</ProjectName>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
         <Base>true</Base>
@@ -384,11 +385,15 @@
             <Form>FormMain</Form>
         </DCCReference>
         <DCCReference Include="NES.RomPicker.Android.pas"/>
-        <DCCReference Include="..\source\NES.Audio.Android.AudioTrack.pas"/>
-        <DCCReference Include="..\source\NES.Audio.Windows.MMSystem.pas"/>
-        <DCCReference Include="..\source\NES.Audio.Linux.Alsa.pas"/>
+        <DCCReference Include="..\source\PCM\PCM.Audio.Android.AudioTrack.pas"/>
+        <DCCReference Include="..\source\PCM\PCM.Audio.Windows.MMSystem.pas"/>
+        <DCCReference Include="..\source\PCM\PCM.Audio.Linux.Alsa.pas"/>
+        <DCCReference Include="..\source\PCM\PCM.Audio.Apple.AudioQueue.pas"/>
+        <DCCReference Include="..\source\PCM\PCM.Audio.Null.pas"/>
+        <DCCReference Include="..\source\PCM\PCM.Audio.Factory.pas"/>
+        <DCCReference Include="..\source\PCM\PCM.Audio.pas"/>
+        <DCCReference Include="..\source\PCM\PCM.Audio.Backend.pas"/>
         <DCCReference Include="..\source\NES.Mapper.pas"/>
-        <DCCReference Include="..\source\NES.Audio.Apple.AudioQueue.pas"/>
         <DCCReference Include="..\source\NES.Mapper.Factory.pas"/>
         <DCCReference Include="..\source\mappers\NES.Mapper.ColorDreams.pas"/>
         <DCCReference Include="..\source\mappers\NES.Mapper.Banked.pas"/>
@@ -414,10 +419,6 @@
         <DCCReference Include="..\source\NES.SavePaths.pas"/>
         <DCCReference Include="..\source\NES.Types.pas"/>
         <DCCReference Include="..\source\NES.APU.pas"/>
-        <DCCReference Include="..\source\NES.Audio.pas"/>
-        <DCCReference Include="..\source\NES.Audio.Backend.pas"/>
-        <DCCReference Include="..\source\NES.Audio.Factory.pas"/>
-        <DCCReference Include="..\source\NES.Audio.Null.pas"/>
         <DCCReference Include="..\source\NES.AudioDiagnostics.pas"/>
         <DCCReference Include="..\source\NES.Emulation.pas"/>
         <DCCReference Include="..\source\NES.Bus.pas"/>
@@ -971,6 +972,12 @@
                     </Platform>
                 </DeployFile>
                 <DeployFile LocalName="Win32\Debug\NESFMX.exe" Configuration="Debug" Class="ProjectOutput">
+                    <Platform Name="Win32">
+                        <RemoteName>NESFMX.exe</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="Win32\Release\NESFMX.exe" Configuration="Release" Class="ProjectOutput">
                     <Platform Name="Win32">
                         <RemoteName>NESFMX.exe</RemoteName>
                         <Overwrite>true</Overwrite>
