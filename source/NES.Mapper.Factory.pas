@@ -14,7 +14,7 @@ uses
   NES.Mapper.Mmc3, NES.Mapper.Axrom, NES.Mapper.Gxrom, NES.Mapper.ColorDreams,
   NES.Mapper.Discrete, NES.Mapper.MmcLatch, NES.Mapper.Mmc3Variants,
   NES.Mapper.Vrc, NES.Mapper.Sunsoft, NES.Mapper.Rambo, NES.Mapper.Cony,
-  NES.Mapper.Bandai, NES.Mapper.Jy, NES.Mapper.Mmc5;
+  NES.Mapper.Bandai, NES.Mapper.Jy, NES.Mapper.Mmc5, NES.Mapper.Subor;
 
 function CreateMapper(MapperId: Integer; const Prg, Chr: TByteArray; HasChrRam: Boolean; MirrorMode: TMirrorMode; LegacyHeader: Boolean): TMapper;
 begin
@@ -41,6 +41,8 @@ begin
       Result := TMapperBandai.Create(MapperId = MAPPER_BANDAI_159, Prg, Chr, HasChrRam, MirrorMode);
     MAPPER_JY_90, MAPPER_JY_209:
       Result := TMapperJy.Create(MapperId, Prg, Chr, HasChrRam, MirrorMode);
+    MAPPER_SUBOR:
+      Result := TMapperSubor.Create(Prg, Chr, HasChrRam, MirrorMode);
     MAPPER_FFE_F3XXX, MAPPER_CPROM, MAPPER_MULTICART_15, MAPPER_IREM_G101, MAPPER_BNROM_NINA001, MAPPER_BANDAI_70, MAPPER_CAMERICA, MAPPER_NINA03, MAPPER_JALECO_87, MAPPER_NAMCO_118, MAPPER_VS_SYSTEM, MAPPER_DISCRETE_112, MAPPER_NINA_113, MAPPER_AGCI, MAPPER_BANDAI_152, MAPPER_NAMCO_154, MAPPER_DXROM, MAPPER_ACTION52, MAPPER_CAMERICA_QUATTRO, MAPPER_DISCRETE_240, MAPPER_WAIXING_242:
       Result := TMapperDiscrete.Create(MapperId, Prg, Chr, HasChrRam, MirrorMode, LegacyHeader);
     MAPPER_MMC2, MAPPER_MMC4:

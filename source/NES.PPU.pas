@@ -63,6 +63,7 @@ type
     procedure PpuWriteMemory(Address: UInt16; Value: UInt8);
     procedure SetVblank(Value: Boolean);
     procedure UpdateNmiState;
+    function VblankStartLine: Integer;
     procedure CaptureSplitState;
     function SampleBackgroundPixel(X, Y: Integer; out PaletteIndex: UInt8): UInt8;
     function SampleSpritePixel(X, Y: Integer; out PaletteIndex: UInt8; out PriorityBehindBg: Boolean; out IsSpriteZero: Boolean): UInt8;
@@ -158,11 +159,19 @@ end;
 procedure TPpu.SetRegion(Value: TNesRegion);
 begin
   FRegion := Value;
-  if Value = TNesRegion.PAL then
+  if Value in [TNesRegion.PAL, TNesRegion.Dendy] then
     FPreRenderLine := 311
   else
     FPreRenderLine := 261;
   Reset;
+end;
+
+function TPpu.VblankStartLine: Integer;
+begin
+  if FRegion = TNesRegion.Dendy then
+    Result := 291
+  else
+    Result := 241;
 end;
 
 procedure TPpu.ConnectMapper(AMapper: TMapper);
@@ -507,7 +516,7 @@ begin
     end;
   end;
 
-  if (FScanline = 241) and (FCycle = 1) then
+  if (FScanline = VblankStartLine) and (FCycle = 1) then
     SetVblank(True);
 
   if (FScanline = FPreRenderLine) and (FCycle = 1) then

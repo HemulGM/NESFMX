@@ -38,6 +38,7 @@ uses
   NES.Mapper.Bandai in '..\source\mappers\NES.Mapper.Bandai.pas',
   NES.Mapper.Jy in '..\source\mappers\NES.Mapper.Jy.pas',
   NES.Mapper.Mmc5 in '..\source\mappers\NES.Mapper.Mmc5.pas',
+  NES.Mapper.Subor in '..\source\mappers\NES.Mapper.Subor.pas',
   NES.Mapper.Mmc1 in '..\source\mappers\NES.Mapper.Mmc1.pas',
   NES.Mapper.Mmc3 in '..\source\mappers\NES.Mapper.Mmc3.pas',
   NES.Mapper.Nrom in '..\source\mappers\NES.Mapper.Nrom.pas',

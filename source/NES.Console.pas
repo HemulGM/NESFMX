@@ -255,7 +255,7 @@ begin
         if FCartridge.Metadata.Timing = TRomTiming.PAL then
           FRegion := TNesRegion.PAL
         else if FCartridge.Metadata.Timing = TRomTiming.Dendy then
-          raise ENesException.Create('Dendy timing is not supported; select NTSC or PAL explicitly');
+          FRegion := TNesRegion.Dendy;
       end;
   end;
   FPpu.SetRegion(FRegion);

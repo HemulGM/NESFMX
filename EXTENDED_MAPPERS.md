@@ -16,6 +16,7 @@ correct legacy headers:
 | Sunsoft | 68, 69 | Sunsoft-4 CHR nametables, FME-7 ROM/RAM banking and CPU IRQ |
 | Cony | 83 | PRG modes, outer banks, CHR modes, scratch registers and CPU IRQ |
 | JY | 90, 209 | PRG/CHR modes, 209 nametable mapping/latches, multiplier and four IRQ clock sources |
+| SUBOR | 167 | Educational-computer PRG banking modes, 8 KiB CHR-RAM and H/V mirroring |
 
 `NES.Mapper.Banked` provides bounded array-based bank access. Hardware wrap is
 explicit. CPU, CPU-write, PPU-address, PPU-fetch and scanline hooks connect the

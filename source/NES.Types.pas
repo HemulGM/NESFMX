@@ -8,7 +8,8 @@ uses
 {$SCOPEDENUMS ON}
 
 type
-  TNesRegion = (NTSC, PAL);
+  // Dendy uses NTSC-style CPU/APU timing with PAL-style PPU frame timing.
+  TNesRegion = (NTSC, PAL, Dendy);
 
   TRegionOverride = (Auto, NTSC, PAL);
 

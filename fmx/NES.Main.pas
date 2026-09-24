@@ -674,6 +674,8 @@ begin
     var RegionName := 'NTSC';
     if Status.Region = TNesRegion.PAL then
       RegionName := 'PAL';
+    if Status.Region = TNesRegion.Dendy then
+      RegionName := 'Dendy';
     //var NewCaption := Format('NESFMX - %s - %.1f FPS - %s', [RegionName, Status.FramesPerSecond, FRomDisplayName]);
     var NewCaption := Format('%.1f - %.1f FPS', [FEmulation.RunFrameMs, Status.FramesPerSecond]);
     if Status.AudioError <> '' then

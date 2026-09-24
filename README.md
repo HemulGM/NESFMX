@@ -213,6 +213,7 @@ The application folder must be writable when creating the INI.
 [Video]
 Scale=2
 Filter=nearest
+Region=Auto
 [Input]
 FourScore=1
 [Controls]
@@ -282,3 +283,8 @@ to the NES port; `Clear' resets all sources when focus is lost or ROM is changed
 `linear` includes it. Valid assignments are: A–Z, 0-9, SPACE, RETURN/ENTER,
 UP, DOWN, LEFT, RIGHT, NUMPAD0–NUMPAD9. Incorrect assignments are replaced with default values.
 R, F5, F6, Esc, and Ctrl+O are used as service combinations.
+
+`Region=Auto` uses the ROM header. `Region=NTSC` and `Region=PAL` override it;
+NES 2.0 ROMs marked Dendy use the Dendy timing automatically: a 1.773448 MHz
+CPU/APU clock with NTSC APU period tables, and a 312-line PPU frame at
+approximately 50 Hz; its NMI begins on scanline 291.

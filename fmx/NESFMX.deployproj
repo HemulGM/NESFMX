@@ -9,68 +9,7 @@
         <DeviceId Condition="'$(Platform)'=='iOSDevice64'"/>
         <DeviceId Condition="'$(Platform)'=='iOSSimARM64'">FD93557D-C4AE-4A3D-84FB-0D1A33D12589</DeviceId>
     </PropertyGroup>
-    <ItemGroup Condition="'$(Platform)'=='WinARM64EC'">
-        <DeployFile Include="$(SKIADIR)\Binary\Shared\WinARM64EC\sk4d.dll" Condition="'$(Config)'=='RELEASE_NO_SOUND' And '$(SKIADIR)'!=''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>sk4d.dll</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>0</Operation>
-            <LocalCommand/>
-            <RemoteCommand/>
-            <Overwrite>True</Overwrite>
-            <Required>True</Required>
-        </DeployFile>
-        <DeployFile Include="$(BDS)\binarm64ec\sk4d.dll" Condition="'$(Config)'=='RELEASE_NO_SOUND' And '$(SKIADIR)'==''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>sk4d.dll</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>0</Operation>
-            <LocalCommand/>
-            <RemoteCommand/>
-            <Overwrite>True</Overwrite>
-            <Required>True</Required>
-        </DeployFile>
-        <DeployFile Include="$(BDS)\binarm64ec\sk4d.dll" Condition="'$(Config)'=='Debug' And '$(SKIADIR)'==''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>sk4d.dll</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>0</Operation>
-            <LocalCommand/>
-            <RemoteCommand/>
-            <Overwrite>True</Overwrite>
-            <Required>True</Required>
-        </DeployFile>
-        <DeployFile Include="$(BDS)\binarm64ec\sk4d.dll" Condition="'$(Config)'=='Release' And '$(SKIADIR)'==''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>sk4d.dll</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>0</Operation>
-            <LocalCommand/>
-            <RemoteCommand/>
-            <Overwrite>True</Overwrite>
-            <Required>True</Required>
-        </DeployFile>
-        <DeployFile Include="$(SKIADIR)\Binary\Shared\WinARM64EC\sk4d.dll" Condition="'$(Config)'=='Debug' And '$(SKIADIR)'!=''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>sk4d.dll</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>0</Operation>
-            <LocalCommand/>
-            <RemoteCommand/>
-            <Overwrite>True</Overwrite>
-            <Required>True</Required>
-        </DeployFile>
-        <DeployFile Include="$(SKIADIR)\Binary\Shared\WinARM64EC\sk4d.dll" Condition="'$(Config)'=='Release' And '$(SKIADIR)'!=''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>sk4d.dll</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>0</Operation>
-            <LocalCommand/>
-            <RemoteCommand/>
-            <Overwrite>True</Overwrite>
-            <Required>True</Required>
-        </DeployFile>
-    </ItemGroup>
+    <ItemGroup Condition="'$(Platform)'=='WinARM64EC'"/>
     <ItemGroup Condition="'$(Platform)'=='OSX64'">
         <DeployFile Include="OSX64\Release\NESFMX" Condition="'$(Config)'=='Release'">
             <RemoteDir>NESFMX.app\Contents\MacOS\</RemoteDir>
@@ -111,46 +50,6 @@
         </DeployFile>
     </ItemGroup>
     <ItemGroup Condition="'$(Platform)'=='Win32'">
-        <DeployFile Include="$(SKIADIR)\Binary\Shared\Win32\sk4d.dll" Condition="'$(Config)'=='Debug' And '$(SKIADIR)'!=''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>sk4d.dll</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>0</Operation>
-            <LocalCommand/>
-            <RemoteCommand/>
-            <Overwrite>True</Overwrite>
-            <Required>True</Required>
-        </DeployFile>
-        <DeployFile Include="$(SKIADIR)\Binary\Shared\Win32\sk4d.dll" Condition="'$(Config)'=='Release' And '$(SKIADIR)'!=''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>sk4d.dll</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>0</Operation>
-            <LocalCommand/>
-            <RemoteCommand/>
-            <Overwrite>True</Overwrite>
-            <Required>True</Required>
-        </DeployFile>
-        <DeployFile Include="$(BDS)\bin\sk4d.dll" Condition="'$(Config)'=='RELEASE_NO_SOUND' And '$(SKIADIR)'==''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>sk4d.dll</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>0</Operation>
-            <LocalCommand/>
-            <RemoteCommand/>
-            <Overwrite>True</Overwrite>
-            <Required>True</Required>
-        </DeployFile>
-        <DeployFile Include="$(SKIADIR)\Binary\Shared\Win32\sk4d.dll" Condition="'$(Config)'=='RELEASE_NO_SOUND' And '$(SKIADIR)'!=''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>sk4d.dll</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>0</Operation>
-            <LocalCommand/>
-            <RemoteCommand/>
-            <Overwrite>True</Overwrite>
-            <Required>True</Required>
-        </DeployFile>
         <DeployFile Include="Win32\Debug\NESFMX.exe" Condition="'$(Config)'=='Debug'">
             <RemoteDir>NESFMX\</RemoteDir>
             <RemoteName>NESFMX.exe</RemoteName>
@@ -161,20 +60,10 @@
             <Overwrite>True</Overwrite>
             <Required>True</Required>
         </DeployFile>
-        <DeployFile Include="$(BDS)\bin\sk4d.dll" Condition="'$(Config)'=='Debug' And '$(SKIADIR)'==''">
+        <DeployFile Include="Win32\Release\NESFMX.exe" Condition="'$(Config)'=='Release'">
             <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>sk4d.dll</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>0</Operation>
-            <LocalCommand/>
-            <RemoteCommand/>
-            <Overwrite>True</Overwrite>
-            <Required>True</Required>
-        </DeployFile>
-        <DeployFile Include="$(BDS)\bin\sk4d.dll" Condition="'$(Config)'=='Release' And '$(SKIADIR)'==''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>sk4d.dll</RemoteName>
-            <DeployClass>Skia</DeployClass>
+            <RemoteName>NESFMX.exe</RemoteName>
+            <DeployClass>ProjectOutput</DeployClass>
             <Operation>0</Operation>
             <LocalCommand/>
             <RemoteCommand/>
@@ -889,93 +778,50 @@
         </DeployFile>
     </ItemGroup>
     <ItemGroup Condition="'$(Platform)'=='Android'"/>
-    <ItemGroup Condition="'$(Platform)'=='OSXARM64'"/>
-    <ItemGroup Condition="'$(Platform)'=='Win64'">
-        <DeployFile Include="$(BDS)\bin64\sk4d.dll" Condition="'$(Config)'=='RELEASE_NO_SOUND' And '$(SKIADIR)'==''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>sk4d.dll</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>0</Operation>
+    <ItemGroup Condition="'$(Platform)'=='OSXARM64'">
+        <DeployFile Include="OSXARM64\Release\NESFMX.info.plist" Condition="'$(Config)'=='Release'">
+            <RemoteDir>NESFMX.app\Contents\</RemoteDir>
+            <RemoteName>Info.plist</RemoteName>
+            <DeployClass>ProjectOSXInfoPList</DeployClass>
+            <Operation>1</Operation>
+            <LocalCommand/>
+            <RemoteCommand/>
+            <Overwrite>True</Overwrite>
+        </DeployFile>
+        <DeployFile Include="OSXARM64\Release\NESFMX.entitlements" Condition="'$(Config)'=='Release'">
+            <RemoteDir>NESFMX.app\..\</RemoteDir>
+            <RemoteName>NESFMX.entitlements</RemoteName>
+            <DeployClass>ProjectOSXEntitlements</DeployClass>
+            <Operation>1</Operation>
+            <LocalCommand/>
+            <RemoteCommand/>
+            <Overwrite>True</Overwrite>
+        </DeployFile>
+        <DeployFile Include="OSXARM64\Release\NESFMX" Condition="'$(Config)'=='Release'">
+            <RemoteDir>NESFMX.app\Contents\MacOS\</RemoteDir>
+            <RemoteName>NESFMX</RemoteName>
+            <DeployClass>ProjectOutput</DeployClass>
+            <Operation>1</Operation>
             <LocalCommand/>
             <RemoteCommand/>
             <Overwrite>True</Overwrite>
             <Required>True</Required>
         </DeployFile>
-        <DeployFile Include="$(SKIADIR)\Binary\Shared\Win64\sk4d.dll" Condition="'$(Config)'=='Debug' And '$(SKIADIR)'!=''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>sk4d.dll</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>0</Operation>
+        <DeployFile Include="$(BDS)\bin\delphi_PROJECTICNS.icns" Condition="'$(Config)'=='Release'">
+            <RemoteDir>NESFMX.app\Contents\Resources\</RemoteDir>
+            <RemoteName>NESFMX.icns</RemoteName>
+            <DeployClass>ProjectOSXResource</DeployClass>
+            <Operation>1</Operation>
             <LocalCommand/>
             <RemoteCommand/>
             <Overwrite>True</Overwrite>
-            <Required>True</Required>
-        </DeployFile>
-        <DeployFile Include="$(SKIADIR)\Binary\Shared\Win64\sk4d.dll" Condition="'$(Config)'=='Release' And '$(SKIADIR)'!=''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>sk4d.dll</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>0</Operation>
-            <LocalCommand/>
-            <RemoteCommand/>
-            <Overwrite>True</Overwrite>
-            <Required>True</Required>
-        </DeployFile>
-        <DeployFile Include="$(SKIADIR)\Binary\Shared\Win64\sk4d.dll" Condition="'$(Config)'=='RELEASE_NO_SOUND' And '$(SKIADIR)'!=''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>sk4d.dll</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>0</Operation>
-            <LocalCommand/>
-            <RemoteCommand/>
-            <Overwrite>True</Overwrite>
-            <Required>True</Required>
-        </DeployFile>
-        <DeployFile Include="$(BDS)\bin64\sk4d.dll" Condition="'$(Config)'=='Debug' And '$(SKIADIR)'==''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>sk4d.dll</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>0</Operation>
-            <LocalCommand/>
-            <RemoteCommand/>
-            <Overwrite>True</Overwrite>
-            <Required>True</Required>
-        </DeployFile>
-        <DeployFile Include="$(BDS)\bin64\sk4d.dll" Condition="'$(Config)'=='Release' And '$(SKIADIR)'==''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>sk4d.dll</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>0</Operation>
-            <LocalCommand/>
-            <RemoteCommand/>
-            <Overwrite>True</Overwrite>
-            <Required>True</Required>
         </DeployFile>
     </ItemGroup>
+    <ItemGroup Condition="'$(Platform)'=='Win64'"/>
     <ItemGroup Condition="'$(Platform)'=='iOSDevice64'"/>
     <ItemGroup Condition="'$(Platform)'=='iOSSimARM64'"/>
     <ItemGroup Condition="'$(Platform)'=='Win64x'"/>
     <ItemGroup Condition="'$(Platform)'=='Linux64'">
-        <DeployFile Include="$(BDS)\binlinux64\libsk4d.so" Condition="'$(Config)'=='Debug' And '$(SKIADIR)'==''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>libsk4d.so</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>1</Operation>
-            <LocalCommand/>
-            <RemoteCommand/>
-            <Overwrite>True</Overwrite>
-            <Required>True</Required>
-        </DeployFile>
-        <DeployFile Include="$(BDS)\binlinux64\libsk4d.so" Condition="'$(Config)'=='Release' And '$(SKIADIR)'==''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>libsk4d.so</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>1</Operation>
-            <LocalCommand/>
-            <RemoteCommand/>
-            <Overwrite>True</Overwrite>
-            <Required>True</Required>
-        </DeployFile>
         <DeployFile Include="Linux64\Debug\NESFMX" Condition="'$(Config)'=='Debug'">
             <RemoteDir>NESFMX\</RemoteDir>
             <RemoteName>NESFMX</RemoteName>
@@ -986,50 +832,10 @@
             <Overwrite>True</Overwrite>
             <Required>True</Required>
         </DeployFile>
-        <DeployFile Include="$(SKIADIR)\Binary\Shared\Linux64\libsk4d.so" Condition="'$(Config)'=='RELEASE_NO_SOUND' And '$(SKIADIR)'!=''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>libsk4d.so</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>1</Operation>
-            <LocalCommand/>
-            <RemoteCommand/>
-            <Overwrite>True</Overwrite>
-            <Required>True</Required>
-        </DeployFile>
         <DeployFile Include="Linux64\RELEASE_NO_SOUND\NESFMX" Condition="'$(Config)'=='RELEASE_NO_SOUND'">
             <RemoteDir>NESFMX\</RemoteDir>
             <RemoteName>NESFMX</RemoteName>
             <DeployClass>ProjectOutput</DeployClass>
-            <Operation>1</Operation>
-            <LocalCommand/>
-            <RemoteCommand/>
-            <Overwrite>True</Overwrite>
-            <Required>True</Required>
-        </DeployFile>
-        <DeployFile Include="$(BDS)\binlinux64\libsk4d.so" Condition="'$(Config)'=='RELEASE_NO_SOUND' And '$(SKIADIR)'==''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>libsk4d.so</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>1</Operation>
-            <LocalCommand/>
-            <RemoteCommand/>
-            <Overwrite>True</Overwrite>
-            <Required>True</Required>
-        </DeployFile>
-        <DeployFile Include="$(SKIADIR)\Binary\Shared\Linux64\libsk4d.so" Condition="'$(Config)'=='Debug' And '$(SKIADIR)'!=''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>libsk4d.so</RemoteName>
-            <DeployClass>Skia</DeployClass>
-            <Operation>1</Operation>
-            <LocalCommand/>
-            <RemoteCommand/>
-            <Overwrite>True</Overwrite>
-            <Required>True</Required>
-        </DeployFile>
-        <DeployFile Include="$(SKIADIR)\Binary\Shared\Linux64\libsk4d.so" Condition="'$(Config)'=='Release' And '$(SKIADIR)'!=''">
-            <RemoteDir>NESFMX\</RemoteDir>
-            <RemoteName>libsk4d.so</RemoteName>
-            <DeployClass>Skia</DeployClass>
             <Operation>1</Operation>
             <LocalCommand/>
             <RemoteCommand/>

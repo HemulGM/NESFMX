@@ -8,6 +8,7 @@ uses
 const
   NES_CPU_HZ = 1789773;
   NES_PAL_CPU_HZ = 1662607;
+  NES_DENDY_CPU_HZ = 1773448;
   NES_WIDTH = 256;
   NES_HEIGHT = 240;
   NES_FRAME_CYCLES = 89342;
@@ -32,6 +33,8 @@ function CpuFrequency(Region: TNesRegion): Integer;
 begin
   if Region = TNesRegion.PAL then
     Result := NES_PAL_CPU_HZ
+  else if Region = TNesRegion.Dendy then
+    Result := NES_DENDY_CPU_HZ
   else
     Result := NES_CPU_HZ;
 end;
@@ -40,6 +43,8 @@ function FrameRate(Region: TNesRegion): Double;
 begin
   if Region = TNesRegion.PAL then
     Result := NES_PAL_CPU_HZ * 16.0 / (5.0 * 312 * 341)
+  else if Region = TNesRegion.Dendy then
+    Result := NES_DENDY_CPU_HZ * 3.0 / (312 * 341)
   else
     Result := NES_CPU_HZ * 3.0 / (NES_FRAME_CYCLES - 0.5);
 end;
