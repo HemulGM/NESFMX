@@ -37,6 +37,7 @@ type
     FFrame: TFrameBuffer;
     FFramePending: Boolean;
     FStatus: TEmulationStatus;
+    FRunFrameMs: Double;
     procedure RunEmulation;
     procedure SnapshotCommand(const Name: string; Loading: Boolean);
     function ProcessSnapshot: Boolean;
@@ -61,12 +62,146 @@ type
     procedure SaveSnapshot(const Name: string);
     procedure LoadSnapshot(const Name: string);
     property SnapshotDirectory: string read FSnapshotDirectory;
+    property RunFrameMs: Double read FRunFrameMs;
   end;
 
 implementation
 
 uses
+  {$IFDEF ANDROID}
+  Androidapi.Helpers, Androidapi.JNIBridge, Androidapi.JNI.JavaTypes,
+  Androidapi.JNI.Os,
+  {$ENDIF}
   System.Diagnostics, System.Math, System.IOUtils, NES.Consts, NES.SavePaths;
+
+{$IFDEF ANDROID}
+
+const
+  ANDROID_THREAD_PRIORITY_URGENT_AUDIO = -19;
+  ANDROID_THREAD_PRIORITY_AUDIO = -16;
+  ANDROID_THREAD_PRIORITY_URGENT_DISPLAY = -8;
+  ANDROID_THREAD_PRIORITY_DISPLAY = -4;
+  ANDROID_THREAD_PRIORITY_FOREGROUND = -2;
+  ANDROID_THREAD_PRIORITY_DEFAULT = 0;
+  ANDROID_THREAD_PRIORITY_BACKGROUND = 10;
+  ANDROID_THREAD_PRIORITY_LOWEST = 19;
+
+type
+  // Java API is available from Android 12 (the native API needs Android 13).
+  [JavaSignature('android/os/PerformanceHintManager$Session')]
+  JNesHintSession = interface(IJavaInstance)
+    ['{3FDDC238-C7FA-423C-BDAA-650E68791F85}']
+    procedure reportActualWorkDuration(actualDurationNanos: Int64); cdecl;
+    procedure close; cdecl;
+  end;
+
+  JNesHintManagerClass = interface(JObjectClass)
+    ['{22FC8E24-BA27-4AE5-A350-A4DB0B4F7A53}']
+  end;
+
+  [JavaSignature('android/os/PerformanceHintManager')]
+  JNesHintManager = interface(JObject)
+    ['{DD96F349-F4DD-4710-BF21-54D1A1A17C61}']
+    function createHintSession(tids: TJavaArray<Integer>; initialTargetWorkDurationNanos: Int64): JNesHintSession; cdecl;
+  end;
+
+  TJNesHintManager = class(TJavaGenericImport<JNesHintManagerClass, JNesHintManager>);
+
+  JNesProcessClass = interface(JObjectClass)
+    ['{932F55BF-E2E8-40E5-9DAE-0B66840CDBA9}']
+    function myTid: Integer; cdecl;
+    procedure setThreadPriority(priority: Integer); cdecl;
+  end;
+
+  [JavaSignature('android/os/Process')]
+  JNesProcess = interface(JObject)
+    ['{C315F8A1-388B-44C2-B6A2-12ED8FD1531F}']
+  end;
+
+  TJNesProcess = class(TJavaGenericImport<JNesProcessClass, JNesProcess>);
+
+  // Owned and called exclusively by the emulation worker, including teardown.
+  TNesFrameHints = class
+  private
+    FManager: JNesHintManager;
+    FSession: JNesHintSession;
+    FTargetNanos, FStart: Int64;
+  public
+    constructor Create(TargetNanos: Int64);
+    destructor Destroy; override;
+    procedure BeginFrame;
+    procedure EndFrame;
+    procedure Pause;
+  end;
+
+constructor TNesFrameHints.Create(TargetNanos: Int64);
+begin
+  inherited Create;
+  FTargetNanos := TargetNanos;
+  if TJBuild_VERSION.JavaClass.SDK_INT < 31 then
+    Exit;
+  try
+    var Service := TAndroidHelper.Context.getSystemService(StringToJString('performance_hint'));
+    if Service <> nil then
+      FManager := TJNesHintManager.Wrap((Service as ILocalObject).GetObjectID);
+  except
+    // Optional scheduling advice must never prevent a game from running.
+    FManager := nil;
+  end;
+end;
+
+destructor TNesFrameHints.Destroy;
+begin
+  Pause;
+  inherited;
+end;
+
+procedure TNesFrameHints.Pause;
+begin
+  if FSession <> nil then
+  try
+    FSession.close;
+  except
+    FManager := nil;
+  end;
+  FSession := nil;
+end;
+
+procedure TNesFrameHints.BeginFrame;
+begin
+  if FManager = nil then
+    Exit;
+  if FSession = nil then
+  try
+    var Tids := TJavaArray<Integer>.Create(1);
+    try
+      // TThread.ThreadID is a pthread handle, not Android's Linux thread ID.
+      Tids[0] := TJNesProcess.JavaClass.myTid;
+      FSession := FManager.createHintSession(Tids, FTargetNanos);
+      if FSession = nil then
+        FManager := nil; // Unsupported device: do not retry on every frame.
+    finally
+      Tids.Free;
+    end;
+  except
+    FManager := nil;
+  end;
+  FStart := TStopwatch.GetTimeStamp;
+end;
+
+procedure TNesFrameHints.EndFrame;
+begin
+  if FSession = nil then
+    Exit;
+  try
+    var Elapsed := TStopwatch.GetTimeStamp - FStart;
+    FSession.reportActualWorkDuration(Max(Int64(1), Round(Elapsed * (1000000000.0 / TStopwatch.Frequency))));
+  except
+    Pause;
+    FManager := nil;
+  end;
+end;
+{$ENDIF}
 
 constructor TNesEmulationThread.Create(const FileName: string; FourScoreEnabled: Boolean; RegionOverride: TRegionOverride; const SaveDirectory: string);
 begin
@@ -84,9 +219,11 @@ begin
     FSaveDirectory := ResolveDefaultSaveDirectory(TPath.GetDocumentsPath, TPath.GetHomePath);
   FConsole := TNesConsole.Create(FourScoreEnabled);
   FConsole.LoadRom(FileName, RegionOverride);
-  FSnapshotDirectory := ResolveGameSavePath(TPath.Combine(
-      ExtractFileDir(ExcludeTrailingPathDelimiter(FSaveDirectory)), 'snapshots'),
-    FileName, FConsole.RomIdentity, '');
+  FSnapshotDirectory := ResolveGameSavePath(
+    TPath.Combine(ExtractFileDir(ExcludeTrailingPathDelimiter(FSaveDirectory)), 'snapshots'),
+    FileName,
+    FConsole.RomIdentity,
+    '');
   FStatus.Region := FConsole.Region;
   FConsole.Apu.SetSampleRate(NES_SAMPLE_RATE);
 end;
@@ -348,6 +485,9 @@ procedure TNesEmulationThread.Execute;
 begin
   if Terminated then
     Exit;
+  {$IFDEF ANDROID}
+  TJNesProcess.JavaClass.setThreadPriority(ANDROID_THREAD_PRIORITY_URGENT_AUDIO);
+  {$ENDIF}
   try
     FConsole.LoadBattery(FSaveDirectory);
     try
@@ -391,144 +531,166 @@ begin
   var Paused := False;
   var Failed := False;
   var NextSave := TStopwatch.GetTimeStamp + TStopwatch.Frequency * 5;
-  while not Terminated do
-  begin
-    try
-      if ProcessSnapshot then
-      begin
-        NextFrame := TStopwatch.GetTimeStamp;
-        FpsStart := NextFrame;
-        Frames := 0;
-        if Failed then
-          Paused := False;
-        Failed := False;
-      end;
-      var ResetRequested: Boolean;
-      var PauseRequested: Boolean;
-      var ResumeRequested: Boolean;
-      FLock.Enter;
+  {$IFDEF ANDROID}
+  var FrameHints := TNesFrameHints.Create(Round(1000000000.0 / FrameRate(FConsole.Region)));
+  try
+  {$ENDIF}
+    while not Terminated do
+    begin
       try
-        ResetRequested := FResetRequested;
-        FResetRequested := False;
-        PauseRequested := FPauseRequested;
-        FPauseRequested := False;
-        ResumeRequested := FResumeRequested;
-        FResumeRequested := False;
-        FInput.Apply(1, FConsole.Controller1);
-        FInput.Apply(2, FConsole.Controller2);
-        FInput.Apply(3, FConsole.Controller3);
-        FInput.Apply(4, FConsole.Controller4);
-        for var Button := Low(FPowerPad) to High(FPowerPad) do
-          FConsole.Controller2.SetPowerPadButton(Button, FPowerPad[Button]);
-      finally
-        FLock.Leave;
-      end;
-      if ResetRequested then
-      begin
-        FAudio.Clear;
-        FConsole.Reset;
+        if ProcessSnapshot then
+        begin
+          NextFrame := TStopwatch.GetTimeStamp;
+          FpsStart := NextFrame;
+          Frames := 0;
+          if Failed then
+            Paused := False;
+          Failed := False;
+        end;
+        var ResetRequested: Boolean;
+        var PauseRequested: Boolean;
+        var ResumeRequested: Boolean;
         FLock.Enter;
         try
-          FDiagnostics.Clear;
-          FStatus := Default(TEmulationStatus);
-          FStatus.Region := FConsole.Region;
-          FStatus.AudioError := FAudio.Error;
-          FFramePending := False;
+          ResetRequested := FResetRequested;
+          FResetRequested := False;
+          PauseRequested := FPauseRequested;
+          FPauseRequested := False;
+          ResumeRequested := FResumeRequested;
+          FResumeRequested := False;
+          FInput.Apply(1, FConsole.Controller1);
+          FInput.Apply(2, FConsole.Controller2);
+          FInput.Apply(3, FConsole.Controller3);
+          FInput.Apply(4, FConsole.Controller4);
+          for var Button := Low(FPowerPad) to High(FPowerPad) do
+            FConsole.Controller2.SetPowerPadButton(Button, FPowerPad[Button]);
         finally
           FLock.Leave;
         end;
-        NextFrame := TStopwatch.GetTimeStamp;
-        FpsStart := NextFrame;
-        Frames := 0;
-        Paused := False;
-        Failed := False;
-      end;
-      if ResumeRequested and Paused and not Failed then
-      begin
-        Paused := False;
-        NextFrame := TStopwatch.GetTimeStamp;
-        FpsStart := NextFrame;
-        Frames := 0;
-      end;
-      if PauseRequested then
-      begin
-        FAudio.Clear;
-        Paused := True;
-        FConsole.SaveBattery;
-      end;
-      if Paused then
-      begin
-        FWake.WaitFor(INFINITE);
-        Continue;
-      end;
-      var ClockNow := TStopwatch.GetTimeStamp;
-      if ClockNow < NextFrame then
-      begin
-        FWake.WaitFor(Cardinal(Max(Int64(1), (NextFrame - ClockNow) * 1000 div TStopwatch.Frequency)));
-        Continue;
-      end;
-      if Terminated then
-        Break;
-      FConsole.RunFrame;
-      var Count: Integer;
-      repeat
-        Count := FConsole.Apu.PopSamples(Samples);
-        if Count > 0 then
+        if ResetRequested then
         begin
-          FAudio.Submit(Samples, Count);
+          FAudio.Clear;
+          FConsole.Reset;
           FLock.Enter;
           try
-            FDiagnostics.Capture(FConsole, FAudio, Samples, Count);
+            FDiagnostics.Clear;
+            FStatus := Default(TEmulationStatus);
+            FStatus.Region := FConsole.Region;
+            FStatus.AudioError := FAudio.Error;
+            FFramePending := False;
+          finally
+            FLock.Leave;
+          end;
+          NextFrame := TStopwatch.GetTimeStamp;
+          FpsStart := NextFrame;
+          Frames := 0;
+          Paused := False;
+          Failed := False;
+        end;
+        if ResumeRequested and Paused and not Failed then
+        begin
+          Paused := False;
+          NextFrame := TStopwatch.GetTimeStamp;
+          FpsStart := NextFrame;
+          Frames := 0;
+        end;
+        if PauseRequested then
+        begin
+          FAudio.Clear;
+          Paused := True;
+          FConsole.SaveBattery;
+        end;
+        if Paused then
+        begin
+          {$IFDEF ANDROID}
+          FrameHints.Pause;
+          {$ENDIF}
+          FWake.WaitFor(INFINITE);
+          Continue;
+        end;
+        var ClockNow := TStopwatch.GetTimeStamp;
+        if ClockNow < NextFrame then
+        begin
+          FWake.WaitFor(Cardinal(Max(Int64(1), (NextFrame - ClockNow) * 1000 div TStopwatch.Frequency)));
+          Continue;
+        end;
+        if Terminated then
+          Break;
+        {$IFDEF ANDROID}
+        // Report frame work only, excluding the frame limiter and paused time.
+        FrameHints.BeginFrame;
+        {$ENDIF}
+        var T1 := TStopwatch.GetTimeStamp;
+        FConsole.RunFrame;
+        var T2 := TStopwatch.GetTimeStamp;
+        FRunFrameMs := (T2 - T1) * 1000.0 / TStopwatch.Frequency;
+        var Count: Integer;
+        repeat
+          Count := FConsole.Apu.PopSamples(Samples);
+          if Count > 0 then
+          begin
+            FAudio.Submit(Samples, Count);
+            FLock.Enter;
+            try
+              FDiagnostics.Capture(FConsole, FAudio, Samples, Count);
+            finally
+              FLock.Leave;
+            end;
+          end;
+        until Count = 0;
+        Inc(Frames);
+        ClockNow := TStopwatch.GetTimeStamp;
+        if ClockNow >= NextSave then
+        begin
+          FConsole.SaveBattery;
+          NextSave := ClockNow + TStopwatch.Frequency * 5;
+        end;
+        FLock.Enter;
+        try
+          // One bounded mailbox: a slow UI skips old frames instead of queuing them.
+          FFrame := FConsole.Ppu.Frame;
+          FFramePending := True;
+          Inc(FStatus.FrameNumber);
+          FStatus.AudioError := FAudio.Error;
+          FStatus.AudioQueue := FAudio.QueueState;
+          if ClockNow - FpsStart >= TStopwatch.Frequency then
+          begin
+            FStatus.FramesPerSecond := Frames * TStopwatch.Frequency / (ClockNow - FpsStart);
+            Frames := 0;
+            FpsStart := ClockNow;
+          end;
+        finally
+          FLock.Leave;
+        end;
+        {$IFDEF ANDROID}
+        FrameHints.EndFrame;
+        {$ENDIF}
+        Inc(NextFrame, FramePeriod);
+        // Bound catch-up after debugging or an unusually slow frame.
+        if ClockNow - NextFrame > FramePeriod * 3 then
+          NextFrame := ClockNow + FramePeriod;
+      except
+        on E: Exception do
+        begin
+          FAudio.Clear;
+          Paused := True;
+          FLock.Enter;
+          Failed := True;
+          try
+            // A reset submitted during the failed frame supersedes its error.
+            if not FResetRequested then
+              FStatus.Error := E.Message;
           finally
             FLock.Leave;
           end;
         end;
-      until Count = 0;
-      Inc(Frames);
-      ClockNow := TStopwatch.GetTimeStamp;
-      if ClockNow >= NextSave then
-      begin
-        FConsole.SaveBattery;
-        NextSave := ClockNow + TStopwatch.Frequency * 5;
-      end;
-      FLock.Enter;
-      try
-        // One bounded mailbox: a slow UI skips old frames instead of queuing them.
-        FFrame := FConsole.Ppu.Frame;
-        FFramePending := True;
-        Inc(FStatus.FrameNumber);
-        FStatus.AudioError := FAudio.Error;
-        FStatus.AudioQueue := FAudio.QueueState;
-        if ClockNow - FpsStart >= TStopwatch.Frequency then
-        begin
-          FStatus.FramesPerSecond := Frames * TStopwatch.Frequency / (ClockNow - FpsStart);
-          Frames := 0;
-          FpsStart := ClockNow;
-        end;
-      finally
-        FLock.Leave;
-      end;
-      Inc(NextFrame, FramePeriod);
-      // Bound catch-up after debugging or an unusually slow frame.
-      if ClockNow - NextFrame > FramePeriod * 3 then
-        NextFrame := ClockNow + FramePeriod;
-    except
-      on E: Exception do
-      begin
-        FAudio.Clear;
-        Paused := True;
-        FLock.Enter;
-        Failed := True;
-        try
-          // A reset submitted during the failed frame supersedes its error.
-          if not FResetRequested then
-            FStatus.Error := E.Message;
-        finally
-          FLock.Leave;
-        end;
       end;
     end;
+  {$IFDEF ANDROID}
+  finally
+    FrameHints.Free;
   end;
+  {$ENDIF}
 end;
 
 end.

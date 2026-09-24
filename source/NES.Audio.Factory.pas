@@ -18,6 +18,8 @@ uses
   NES.Audio.Android.AudioTrack;
   {$ELSEIF Defined(LINUX) and not Defined(ANDROID) and not Defined(NES_AUDIO_NULL)}
   NES.Audio.Linux.Alsa;
+  {$ELSEIF (Defined(MACOS) or Defined(IOS)) and not Defined(NES_AUDIO_NULL)}
+  NES.Audio.Apple.AudioQueue;
   {$ELSE}
   NES.Audio.Null;
   {$ENDIF}
@@ -32,6 +34,8 @@ begin
   Result := TNesAndroidAudioBackend.Create;
   {$ELSEIF Defined(LINUX) and not Defined(ANDROID)}
   Result := TNesLinuxAudioBackend.Create;
+  {$ELSEIF Defined(MACOS) or Defined(IOS)}
+  Result := TNesAppleAudioBackend.Create;
   {$ELSE}
   Result := TNesNullAudioBackend.Create('Audio output is not implemented for this platform');
   {$ENDIF}

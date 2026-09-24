@@ -674,10 +674,11 @@ begin
     var RegionName := 'NTSC';
     if Status.Region = TNesRegion.PAL then
       RegionName := 'PAL';
-    var NewCaption := Format('NESFMX - %s - %.1f FPS - %s',
-      [RegionName, Status.FramesPerSecond, FRomDisplayName]);
+    //var NewCaption := Format('NESFMX - %s - %.1f FPS - %s', [RegionName, Status.FramesPerSecond, FRomDisplayName]);
+    var NewCaption := Format('%.1f - %.1f FPS', [FEmulation.RunFrameMs, Status.FramesPerSecond]);
     if Status.AudioError <> '' then
       NewCaption := NewCaption + ' - sound unavailable';
+    //NewCaption := NewCaption;
     if Caption <> NewCaption then
       SetStatus(NewCaption);
   end;

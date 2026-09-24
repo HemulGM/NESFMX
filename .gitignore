@@ -20,3 +20,5 @@ __recovery/
 /fmx/Win64/*
 /fmx/Android64/*
 /fmx/Win32/*
+/fmx/iOSSimARM64/*
+/fmx/OSX64/*

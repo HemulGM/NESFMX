@@ -5,11 +5,13 @@ NROM, MMC1–MMC5, UxROM, CNROM, AxROM, Color Dreams, GxROM, Bandai, VRC,
 Sunsoft, RAMBO-1, Namco 108, JY and other boards from the proven ROM collection.
 A list of implementations, test results, and limitations are provided in
 [description of mappers](EXTENDED_MAPPERS.md).
-Audio output is implemented for Windows (Win32/Win64), Linux64 and Android (ARM/ARM64).
+Audio output is implemented for Windows (Win32/Win64), Linux64, Android (ARM/ARM64),
+macOS (Intel/Apple Silicon) and iOS.
 
 SDL is no longer required: the window, zoom, keyboard, timer, and PNG images
 are implemented using FMX tools. 44 100 Hz streaming audio, mono PCM16 output via
-Windows WaveOut (`Winapi.MMSystem`), ALSA (`libasound.so.2`) on Linux or Android AudioTrack:
+Windows WaveOut (`Winapi.MMSystem`), ALSA (`libasound.so.2`) on Linux,
+Android AudioTrack or Apple Audio Queue (AudioToolbox):
 FMX Media does not provide a queue of arbitrary PCM samples.
 On Windows, third-party DLLs and runtime packages are not needed; on Linux, ALSA is needed.
 
@@ -39,9 +41,46 @@ Tested with Delphi 13 / compiler 37.0.
 
 The audio subsystem is separate from the platform API: `NES.Audio` provides a common
 facade, `NES.Audio.Windows` implements output via WaveOut, `NES.Audio.Linux` via
-ALSA, and `NES.Audio.Android` via AudioTrack. Other operating systems are still
-using the NES.Audio.Null`: emulation continues without sound, the reason is available
-through `Audio.Error` and diagnostics. Native audio has not yet been implemented for these operating systems.
+ALSA, `NES.Audio.Android` via AudioTrack, and `NES.Audio.Apple.AudioQueue` via
+AudioToolbox on macOS/iOS. Unsupported platforms use `NES.Audio.Null`:
+emulation continues without sound, with the reason available through `Audio.Error`.
+
+### macOS and iOS audio
+
+The factory automatically selects `TNesAppleAudioBackend` for Apple targets,
+unless `NES_AUDIO_NULL` is defined. AudioToolbox is a system framework; no
+third-party audio library or microphone permission is required for playback.
+Build with the appropriate Delphi Apple SDK and deploy through PAServer.
+
+The backend copies PCM16 mono at 44100 Hz into four native buffers of up to
+1024 samples. It primes two blocks before starting Audio Queue and retries a
+temporary `kAudioQueueErr_CannotStartYet` result; a full queue drops new samples
+without waiting for playback.
+Audio Queue delivers callbacks on its own thread, so the emulation worker
+does not need a run loop. Clear synchronously stops/resets the queue; subsequent
+PCM restarts playback. Disposal stops callbacks before releasing their buffers.
+Queue diagnostics report submitted/dropped samples and occupied buffers;
+`PositionKnown` remains false because a returned buffer is reusable but may
+not yet have reached the speakers.
+
+On iOS the backend activates the application's shared AVAudioSession without
+changing its category. The default category respects the silent switch and
+does not enable background playback. If session activation is temporarily
+denied (for example during an interruption), pending sound is cleared and
+activation is retried on a later submission. Other native failures close the
+queue and are reported through `Audio.Error`.
+
+Verified with Delphi 13: host tests pass on Win32/Win64; the backend and factory
+compile with Q+/R+ for OSX64, OSXARM64, iOSDevice64 and iOSSimARM64. Apple linking
+and device playback still require validation with an installed Apple SDK and
+hardware (not available in the Windows development environment used here).
+On each Apple target, check audible ROM playback, pause/resume, reset, ROM
+replacement and shutdown; on iOS also check silent mode, interruptions and
+audio route changes.
+
+API reference: [Apple Audio Queue Services](https://developer.apple.com/documentation/audiotoolbox/audio-queue-services).
+
+### Adding another audio backend
 
 To add sound for the platform:
 

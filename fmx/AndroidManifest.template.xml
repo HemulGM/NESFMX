@@ -21,6 +21,7 @@
     </queries>
 
     <application
+        android:appCategory="game"
         android:debuggable="%debuggable%"
         android:hardwareAccelerated="%hardwareAccelerated%"
         android:icon="%icon%"

@@ -7,17 +7,20 @@ uses
   NES.Main in 'NES.Main.pas' {FormMain},
   {$IFDEF ANDROID}
   NES.RomPicker.Android in 'NES.RomPicker.Android.pas',
-  {$ENDIF}
+  {$ENDIF }
   {$IF Defined(ANDROID) and not Defined(NES_AUDIO_NULL)}
   NES.Audio.Android.AudioTrack in '..\source\NES.Audio.Android.AudioTrack.pas',
-  {$ENDIF}
+  {$ENDIF }
   {$IF Defined(MSWINDOWS) and not Defined(NES_AUDIO_NULL)}
   NES.Audio.Windows.MMSystem in '..\source\NES.Audio.Windows.MMSystem.pas',
-  {$ENDIF}
+  {$ENDIF }
   {$IF Defined(LINUX) and not Defined(ANDROID) and not Defined(NES_AUDIO_NULL)}
   NES.Audio.Linux.Alsa in '..\source\NES.Audio.Linux.Alsa.pas',
-  {$ENDIF}
+  {$ENDIF }
   NES.Mapper in '..\source\NES.Mapper.pas',
+  {$IF (Defined(MACOS) or Defined(IOS)) and not Defined(NES_AUDIO_NULL)}
+  NES.Audio.Apple.AudioQueue in '..\source\NES.Audio.Apple.AudioQueue.pas',
+  {$ENDIF }
   NES.Mapper.Factory in '..\source\NES.Mapper.Factory.pas',
   NES.Mapper.ColorDreams in '..\source\mappers\NES.Mapper.ColorDreams.pas',
   NES.Mapper.Banked in '..\source\mappers\NES.Mapper.Banked.pas',
