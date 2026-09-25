@@ -61,11 +61,12 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Math, System.TypInfo, FMX.Graphics
+  System.SysUtils, System.TypInfo, FMX.Graphics,
   {$IFDEF ANDROID}
-    , Androidapi.JNIBridge, Androidapi.JNI.GraphicsContentViewText,
-    FMX.Platform.Android
-  {$ENDIF};
+  Androidapi.JNIBridge, Androidapi.JNI.GraphicsContentViewText,
+  FMX.Platform.Android,
+  {$ENDIF}
+  System.Math;
 
 {$IFDEF ANDROID}
 type
@@ -111,14 +112,14 @@ begin
     Exit;
   end;
   var ChangedIndex := event.getActionIndex;
-  for var I := 0 to event.getPointerCount - 1 do
+  for var i := 0 to event.getPointerCount - 1 do
   begin
-    var Id := event.getPointerId(I);
-    var Point := FKeyboard.AbsoluteToLocal(TPointF.Create(event.getX(I) / FScale, event.getY(I) / FScale));
-    if (I = ChangedIndex) and ((Action = TJMotionEvent.JavaClass.ACTION_UP) or
+    var Id := event.getPointerId(i);
+    var Point := FKeyboard.AbsoluteToLocal(TPointF.Create(event.getX(i) / FScale, event.getY(i) / FScale));
+    if (i = ChangedIndex) and ((Action = TJMotionEvent.JavaClass.ACTION_UP) or
       (Action = TJMotionEvent.JavaClass.ACTION_POINTER_UP)) then
       FKeyboard.PointerUp(Id)
-    else if (I = ChangedIndex) and ((Action = TJMotionEvent.JavaClass.ACTION_DOWN) or
+    else if (i = ChangedIndex) and ((Action = TJMotionEvent.JavaClass.ACTION_DOWN) or
       (Action = TJMotionEvent.JavaClass.ACTION_POINTER_DOWN)) then
       FKeyboard.PointerDown(Id, Point)
     else
@@ -170,7 +171,7 @@ begin
   Gap := Max(1.5, U * 0.08);
   H := (Height - Gap * 7) / 6;
   AddVisualKey(Key, RectF(Column * U + Gap, Row * (H + Gap) + Gap,
-    (Column + Span) * U - Gap, Row * (H + Gap) + H));
+      (Column + Span) * U - Gap, Row * (H + Gap) + H));
 end;
 
 procedure TNesSuborKeyboard.AddTallKey(Key: TSuborKey; Row: Integer; Column, Span, Rows: Single);
@@ -181,7 +182,7 @@ begin
   Gap := Max(1.5, U * 0.08);
   H := (Height - Gap * 7) / 6;
   AddVisualKey(Key, RectF(Column * U + Gap, Row * (H + Gap) + Gap,
-    (Column + Span) * U - Gap, (Row + Rows) * (H + Gap) - Gap));
+      (Column + Span) * U - Gap, (Row + Rows) * (H + Gap) - Gap));
 end;
 
 procedure TNesSuborKeyboard.AddVisualKey(Key: TSuborKey; const Bounds: TRectF);
@@ -543,7 +544,7 @@ begin
     SkEqual:
       Result := '¤  +' + sLineBreak + '$  =';
     SkBackslash:
-      Result := '(  )'+ sLineBreak + '|  \';
+      Result := '(  )' + sLineBreak + '|  \';
     SkLeft:
       Result := '←';
     SkRight:
@@ -616,3 +617,4 @@ begin
 end;
 
 end.
+

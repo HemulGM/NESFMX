@@ -125,15 +125,15 @@ begin
     Exit;
   end;
   var ChangedIndex := event.getActionIndex;
-  for var I := 0 to event.getPointerCount - 1 do
+  for var i := 0 to event.getPointerCount - 1 do
   begin
-    var Id := event.getPointerId(I);
-    var Point := FPad.AbsoluteToLocal(TPointF.Create(event.getX(I) / FScale,
-        event.getY(I) / FScale));
-    if (I = ChangedIndex) and ((Action = TJMotionEvent.JavaClass.ACTION_UP) or
+    var Id := event.getPointerId(i);
+    var Point := FPad.AbsoluteToLocal(TPointF.Create(event.getX(i) / FScale,
+        event.getY(i) / FScale));
+    if (i = ChangedIndex) and ((Action = TJMotionEvent.JavaClass.ACTION_UP) or
       (Action = TJMotionEvent.JavaClass.ACTION_POINTER_UP)) then
       FPad.PointerUp(Id)
-    else if (I = ChangedIndex) and ((Action = TJMotionEvent.JavaClass.ACTION_DOWN) or
+    else if (i = ChangedIndex) and ((Action = TJMotionEvent.JavaClass.ACTION_DOWN) or
       (Action = TJMotionEvent.JavaClass.ACTION_POINTER_DOWN)) then
       FPad.PointerDown(Id, Point)
     else
