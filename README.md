@@ -35,7 +35,27 @@ without changing the ROM on the disk. There is no full support for NES 2.0 exten
 
 Open `fmx/NESFMX.dproj` in RAD Studio with Delphi FMX support, select
 Win32 or Win64 and run Build. The form `fmx/NES.Main.fmx` is available for
-visual editing. The common core is located in `source/'.
+visual editing. Sources are grouped by responsibility:
+
+```
+source/
+  pcm/             shared platform audio backend
+  cores/
+    Core.Emulation.pas       frontend/core contract
+    Core.NesAdapter.pas      NES adapter
+    Core.GameBoyAdapter.pas  Game Boy adapter
+    nes/
+      mappers/
+    gb/
+```
+
+`IEmulationCore` is the frontend boundary for every console: it receives a
+logical eight-button input state and produces a size-tagged, row-major FMX
+frame. Platform-specific settings stay in the adapter, so a future core only
+needs an adapter plus a folder under `source/cores/`. The current frontend
+selects NES for `.nes` and Game Boy for `.gb`/`.gbc` ROMs. Game Boy save states
+and reset are deliberately reported as unsupported until that core implements
+them.
 Overflow and range checks are included in Debug and Release.
 Tested with Delphi 13 / compiler 37.0.
 

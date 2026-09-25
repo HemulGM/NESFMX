@@ -1,4 +1,4 @@
-unit NES.Gamepad;
+﻿unit NES.Gamepad;
 
 interface
 
