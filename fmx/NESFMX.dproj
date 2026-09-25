@@ -381,6 +381,7 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="NES.Gamepad.pas"/>
+        <DCCReference Include="NES.SuborKeyboard.pas"/>
         <DCCReference Include="NES.Main.pas">
             <Form>FormMain</Form>
         </DCCReference>

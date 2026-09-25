@@ -16,6 +16,7 @@ type
     FController2: TController;
     FController3: TController;
     FController4: TController;
+    FSuborKeyboard: TSuborKeyboard;
     FFourScoreEnabled: Boolean;
     FControllerStrobe: Boolean;
     FControllerReadIndex: array[0..1] of Integer;
@@ -33,7 +34,7 @@ type
     procedure SerializeState(State: TNesStateArchive);
     constructor Create;
     procedure Reset;
-    procedure Connect(Cartridge: TCartridge; Ppu: TPpu; Apu: TApu; Controller1, Controller2: TController; Controller3: TController = nil; Controller4: TController = nil);
+    procedure Connect(Cartridge: TCartridge; Ppu: TPpu; Apu: TApu; Controller1, Controller2: TController; Controller3: TController = nil; Controller4: TController = nil; SuborKeyboard: TSuborKeyboard = nil);
     function CpuRead(Address: UInt16): UInt8;
     procedure CpuWrite(Address: UInt16; Value: UInt8);
     function IsDmaActive: Boolean;
@@ -52,6 +53,8 @@ begin
   State.Field(FFourScoreEnabled, SizeOf(FFourScoreEnabled));
   State.Field(FControllerStrobe, SizeOf(FControllerStrobe));
   State.Field(FControllerReadIndex, SizeOf(FControllerReadIndex));
+  if FSuborKeyboard <> nil then
+    FSuborKeyboard.SerializeState(State);
   State.Field(FDmaActive, SizeOf(FDmaActive));
   State.Field(FDmaDummy, SizeOf(FDmaDummy));
   State.Field(FDmaAlign, SizeOf(FDmaAlign));
@@ -75,7 +78,7 @@ begin
   FDmaData := 0;
 end;
 
-procedure TNesBus.Connect(Cartridge: TCartridge; Ppu: TPpu; Apu: TApu; Controller1, Controller2, Controller3, Controller4: TController);
+procedure TNesBus.Connect(Cartridge: TCartridge; Ppu: TPpu; Apu: TApu; Controller1, Controller2, Controller3, Controller4: TController; SuborKeyboard: TSuborKeyboard);
 begin
   FCartridge := Cartridge;
   FPpu := Ppu;
@@ -84,6 +87,7 @@ begin
   FController2 := Controller2;
   FController3 := Controller3;
   FController4 := Controller4;
+  FSuborKeyboard := SuborKeyboard;
 end;
 
 procedure TNesBus.WriteControllers(Value: UInt8);
@@ -150,8 +154,13 @@ begin
       Exit(FApu.CpuReadStatus);
     $4016:
       Exit(ReadController(0));
-    $4017:
-      Exit(ReadController(1));
+  $4017:
+      begin
+        Result := ReadController(1);
+        if FSuborKeyboard <> nil then
+          Result := Result or FSuborKeyboard.Read;
+        Exit;
+      end;
   end;
 
   var Value: UInt8;
@@ -194,6 +203,8 @@ begin
     $4016:
       begin
         WriteControllers(Value);
+        if FSuborKeyboard <> nil then
+          FSuborKeyboard.Write(Value);
         if (FCartridge <> nil) and (FCartridge.Mapper <> nil) then
           FCartridge.Mapper.CpuWriteTimed(Address, Value, FCpuCycle);
         Exit;
@@ -256,6 +267,8 @@ begin
   FControllerStrobe := False;
   FControllerReadIndex[0] := 0;
   FControllerReadIndex[1] := 0;
+  if FSuborKeyboard <> nil then
+    FSuborKeyboard.Reset;
   if (FController1 <> nil) and (FController2 <> nil) then
   begin
     WriteControllers(1);

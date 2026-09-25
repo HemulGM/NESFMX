@@ -779,19 +779,19 @@
     </ItemGroup>
     <ItemGroup Condition="'$(Platform)'=='Android'"/>
     <ItemGroup Condition="'$(Platform)'=='OSXARM64'">
-        <DeployFile Include="OSXARM64\Release\NESFMX.info.plist" Condition="'$(Config)'=='Release'">
-            <RemoteDir>NESFMX.app\Contents\</RemoteDir>
-            <RemoteName>Info.plist</RemoteName>
-            <DeployClass>ProjectOSXInfoPList</DeployClass>
+        <DeployFile Include="OSXARM64\Release\NESFMX.entitlements" Condition="'$(Config)'=='Release'">
+            <RemoteDir>NESFMX.app\..\</RemoteDir>
+            <RemoteName>NESFMX.entitlements</RemoteName>
+            <DeployClass>ProjectOSXEntitlements</DeployClass>
             <Operation>1</Operation>
             <LocalCommand/>
             <RemoteCommand/>
             <Overwrite>True</Overwrite>
         </DeployFile>
-        <DeployFile Include="OSXARM64\Release\NESFMX.entitlements" Condition="'$(Config)'=='Release'">
-            <RemoteDir>NESFMX.app\..\</RemoteDir>
-            <RemoteName>NESFMX.entitlements</RemoteName>
-            <DeployClass>ProjectOSXEntitlements</DeployClass>
+        <DeployFile Include="OSXARM64\Release\NESFMX.info.plist" Condition="'$(Config)'=='Release'">
+            <RemoteDir>NESFMX.app\Contents\</RemoteDir>
+            <RemoteName>Info.plist</RemoteName>
+            <DeployClass>ProjectOSXInfoPList</DeployClass>
             <Operation>1</Operation>
             <LocalCommand/>
             <RemoteCommand/>

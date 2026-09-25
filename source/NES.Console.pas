@@ -18,6 +18,7 @@ type
     FController2: TController;
     FController3: TController;
     FController4: TController;
+    FSuborKeyboard: TSuborKeyboard;
     FCpuCycles: UInt64;
     FPalPpuPhase: Integer;
     FRegion: TNesRegion;
@@ -48,15 +49,16 @@ type
     property Controller2: TController read FController2;
     property Controller3: TController read FController3;
     property Controller4: TController read FController4;
+    property SuborKeyboard: TSuborKeyboard read FSuborKeyboard;
   end;
 
 implementation
 
 uses
-  System.Hash, System.IOUtils;
+  System.Hash, System.IOUtils, NES.Mapper;
 
 const
-  SNAPSHOT_VERSION = 1;
+  SNAPSHOT_VERSION = 2;
   SNAPSHOT_MAGIC: array[0..7] of AnsiChar = ('N', 'E', 'S', 'F', 'M', 'X', 'S', 'S');
 
 type
@@ -222,15 +224,17 @@ begin
   FController2 := TController.Create;
   FController3 := TController.Create;
   FController4 := TController.Create;
+  FSuborKeyboard := TSuborKeyboard.Create;
   FController2.PowerPadEnabled := not FourScoreEnabled;
   FBus.FourScoreEnabled := FourScoreEnabled;
   FBus.Connect(FCartridge, FPpu, FApu, FController1, FController2,
-    FController3, FController4);
+    FController3, FController4, FSuborKeyboard);
   FCpu.Connect(FBus.CpuRead, FBus.CpuWrite);
 end;
 
 destructor TNesConsole.Destroy;
 begin
+  FSuborKeyboard.Free;
   FController4.Free;
   FController3.Free;
   FController2.Free;
@@ -246,6 +250,7 @@ end;
 procedure TNesConsole.LoadRom(const FileName: string; RegionOverride: TRegionOverride);
 begin
   FCartridge.LoadFromFile(FileName);
+  FSuborKeyboard.Connected := FCartridge.MapperId = MAPPER_SUBOR;
   FRegion := TNesRegion.NTSC;
   case RegionOverride of
     TRegionOverride.PAL:

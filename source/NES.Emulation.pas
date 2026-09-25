@@ -42,6 +42,7 @@ type
     FResetRequested, FPauseRequested, FResumeRequested: Boolean;
     FFrame: TFrameBuffer;
     FFramePending: Boolean;
+    FUsesSuborKeyboard: Boolean;
     FStatus: TEmulationStatus;
     FRunFrameMs: Double;
     procedure RunEmulation;
@@ -57,6 +58,7 @@ type
     procedure StopAndSave;
     procedure SetKey(Code: UInt32; Pressed: Boolean; const Keys, Keys2: TKeyMap); overload;
     procedure SetKey(Code: UInt32; Pressed: Boolean; const Keys, Keys2, Keys3, Keys4: TKeyMap); overload;
+    procedure SetSuborKeys(const Keys: TSuborKeys);
     procedure ClearInput;
     procedure SetButtons(Source: UInt32; Player: Integer; const Buttons: TNesButtons);
     procedure RequestReset;
@@ -69,6 +71,7 @@ type
     procedure LoadSnapshot(const Name: string);
     property SnapshotDirectory: string read FSnapshotDirectory;
     property RunFrameMs: Double read FRunFrameMs;
+    property UsesSuborKeyboard: Boolean read FUsesSuborKeyboard;
   end;
 
 implementation
@@ -229,6 +232,7 @@ begin
     FSaveDirectory := ResolveDefaultSaveDirectory(TPath.GetDocumentsPath, TPath.GetHomePath);
   FConsole := TNesConsole.Create(FourScoreEnabled);
   FConsole.LoadRom(FileName, RegionOverride);
+  FUsesSuborKeyboard := FConsole.SuborKeyboard.Connected;
   FSnapshotDirectory := ResolveGameSavePath(
     TPath.Combine(ExtractFileDir(ExcludeTrailingPathDelimiter(FSaveDirectory)), 'snapshots'),
     FileName,
@@ -378,6 +382,8 @@ begin
     Exit;
   FLock.Enter;
   try
+    if FUsesSuborKeyboard then
+      FConsole.SuborKeyboard.SetHostKey(Code, Pressed);
     FInput.SetKey(1, Code, Pressed, Keys);
     FInput.SetKey(2, Code, Pressed, Keys2);
     FInput.SetKey(3, Code, Pressed, Keys3);
@@ -395,11 +401,23 @@ begin
   end;
 end;
 
+procedure TNesEmulationThread.SetSuborKeys(const Keys: TSuborKeys);
+begin
+  FLock.Enter;
+  try
+    if FUsesSuborKeyboard then
+      FConsole.SuborKeyboard.SetScreenKeys(Keys);
+  finally
+    FLock.Leave;
+  end;
+end;
+
 procedure TNesEmulationThread.ClearInput;
 begin
   FLock.Enter;
   try
     FInput.Clear;
+    FConsole.SuborKeyboard.Clear;
     FillChar(FPowerPad, SizeOf(FPowerPad), 0);
   finally
     FLock.Leave;

@@ -288,3 +288,9 @@ R, F5, F6, Esc, and Ctrl+O are used as service combinations.
 NES 2.0 ROMs marked Dendy use the Dendy timing automatically: a 1.773448 MHz
 CPU/APU clock with NTSC APU period tables, and a 312-line PPU frame at
 approximately 50 Hz; its NMI begins on scanline 291.
+
+Mapper 167 Subor educational-computer ROMs automatically connect the Subor
+Keyboard. The PC keyboard then supplies its 13-row matrix through `$4016/$4017`;
+letters, number row, arrows, editing keys, modifiers and F1–F12 are supported.
+For these ROMs Esc, R and F5/F6 are delivered to the emulated keyboard rather
+than handled as application shortcuts.

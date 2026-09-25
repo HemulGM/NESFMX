@@ -6,7 +6,7 @@ uses
   System.SysUtils, System.Classes, System.Types, System.UITypes, System.IniFiles,
   System.Math, FMX.Forms, FMX.Types, FMX.Controls, FMX.Objects, FMX.Graphics,
   FMX.Dialogs, NES.Input, NES.Consts, NES.Types, NES.Emulation,
-  FMX.Controls.Presentation, FMX.StdCtrls, FMX.Layouts, NES.Gamepad
+  FMX.Controls.Presentation, FMX.StdCtrls, FMX.Layouts, NES.Gamepad, NES.SuborKeyboard
   {$IFDEF ANDROID}
     , Androidapi.Helpers, Androidapi.JNI.GraphicsContentViewText,
     Androidapi.JNI.App, Androidapi.JNI.Widget, Androidapi.JNI.Os,
@@ -43,6 +43,7 @@ type
   private
     FEmulation: TNesEmulationThread;
     FGamepad: TNesGamepad;
+    FSuborKeyboard: TNesSuborKeyboard;
     FDisplayFrame: TFrameBuffer;
     FSoundErrorShown: Boolean;
     FConfig: TAppConfig;
@@ -54,11 +55,13 @@ type
     FPicker: TNesAndroidRomPicker;
     FAppEvents: TApplicationEvents;
     FInBackground, FActivityPaused: Boolean;
+    FSuborKeyboardTouchAttached: Boolean;
     function ApplicationStateChanged(Sender: TObject; const AAppEvent: TApplicationEvent; const AContext: TObject): Boolean;
     procedure PollRomPicker;
     {$ENDIF}
     procedure SetKeyState(Code: UInt32; Pressed: Boolean);
     procedure GamepadChanged(Sender: TObject);
+    procedure SuborKeyboardChanged(Sender: TObject);
     procedure SetStatus(const Text: string);
     procedure SyncActivity;
     procedure OpenRom;
@@ -331,9 +334,14 @@ begin
   FGamepad.Align := TAlignLayout.Bottom;
   FGamepad.OnChange := GamepadChanged;
   FGamepad.Enabled := False;
-  {$IFNDEF ANDROID}
-  FGamepad.Visible := True;
-  {$ENDIF}
+  FGamepad.Visible := False;
+  FSuborKeyboard := TNesSuborKeyboard.Create(Self);
+  FSuborKeyboard.Name := 'ScreenSuborKeyboard';
+  FSuborKeyboard.Parent := Self;
+  FSuborKeyboard.Align := TAlignLayout.Bottom;
+  FSuborKeyboard.OnChange := SuborKeyboardChanged;
+  FSuborKeyboard.Enabled := False;
+  FSuborKeyboard.Visible := False;
   FormResize(Self);
   TimerUpdate.Interval := 8;
 end;
@@ -342,6 +350,7 @@ destructor TFormMain.Destroy;
 begin
   if TimerUpdate <> nil then
     TimerUpdate.Enabled := False;
+  FreeAndNil(FSuborKeyboard);
   FreeAndNil(FGamepad); // Detach the native listener before destroying the form.
   {$IFDEF ANDROID}
   FreeAndNil(FAppEvents);
@@ -370,12 +379,22 @@ begin
     FGamepad.Height := TNesGamepad.PreferredHeight(
       ClientWidth - Padding.Left - Padding.Right,
       ClientHeight - Padding.Top - Padding.Bottom - LayoutHead.Height);
+  if FSuborKeyboard <> nil then
+    FSuborKeyboard.Height := TNesSuborKeyboard.PreferredHeight(
+      ClientWidth - Padding.Left - Padding.Right,
+      ClientHeight - Padding.Top - Padding.Bottom - LayoutHead.Height);
 end;
 
 procedure TFormMain.GamepadChanged(Sender: TObject);
 begin
   if FEmulation <> nil then
     FEmulation.SetButtons(INPUT_SCREEN_GAMEPAD, 1, FGamepad.Buttons);
+end;
+
+procedure TFormMain.SuborKeyboardChanged(Sender: TObject);
+begin
+  if FEmulation <> nil then
+    FEmulation.SetSuborKeys(FSuborKeyboard.Keys);
 end;
 
 procedure TFormMain.SetStatus(const Text: string);
@@ -386,12 +405,37 @@ end;
 
 procedure TFormMain.SyncActivity;
 begin
+  var SuborKeyboardActive := (FEmulation <> nil) and FEmulation.UsesSuborKeyboard;
   if FGamepad <> nil then
-    FGamepad.Enabled := (FEmulation <> nil) and not FEmulationFaulted and not FOpeningRom;
+  begin
+    FGamepad.Visible := not SuborKeyboardActive;
+    FGamepad.Enabled := (FEmulation <> nil) and not FEmulationFaulted and not FOpeningRom and not SuborKeyboardActive;
+  end;
+  if FSuborKeyboard <> nil then
+  begin
+    FSuborKeyboard.Visible := SuborKeyboardActive;
+    FSuborKeyboard.Enabled := SuborKeyboardActive and not FEmulationFaulted and not FOpeningRom;
+  end;
   {$IFDEF ANDROID}
+  // The Android view accepts one native touch listener.  The controls are
+  // mutually exclusive, so hand it to the currently visible control.
+  if FSuborKeyboardTouchAttached <> SuborKeyboardActive then
+  begin
+    if FSuborKeyboardTouchAttached then
+      FSuborKeyboard.AttachToForm(nil)
+    else
+      FGamepad.AttachToForm(nil);
+    if SuborKeyboardActive then
+      FSuborKeyboard.AttachToForm(Self)
+    else
+      FGamepad.AttachToForm(Self);
+    FSuborKeyboardTouchAttached := SuborKeyboardActive;
+  end;
   var Paused := FInBackground or FOpeningRom;
   if FGamepad <> nil then
     FGamepad.Enabled := FGamepad.Enabled and not FInBackground;
+  if FSuborKeyboard <> nil then
+    FSuborKeyboard.Enabled := FSuborKeyboard.Enabled and not FInBackground;
   if Paused <> FActivityPaused then
   begin
     FActivityPaused := Paused;
@@ -458,6 +502,8 @@ begin
   FillChar(FKeysDown, SizeOf(FKeysDown), 0);
   if FGamepad <> nil then
     FGamepad.ReleaseAll;
+  if FSuborKeyboard <> nil then
+    FSuborKeyboard.ReleaseAll;
   if FEmulation <> nil then
     FEmulation.ClearInput;
 end;
@@ -487,6 +533,7 @@ begin
     Exit;
   {$ENDIF}
   var Code: Word := EventKey(Key, KeyChar);
+  var SuborKeyboardActive := (FEmulation <> nil) and FEmulation.UsesSuborKeyboard;
   var WasDown: Boolean := False;
   if Code <= High(FKeysDown) then
   begin
@@ -495,11 +542,11 @@ begin
   end;
   if not WasDown then
   begin
-    if Code = vkEscape then
+    if (Code = vkEscape) and not SuborKeyboardActive then
       Close
     else if (Code = Ord('O')) and (ssCtrl in Shift) then
       OpenRom
-    else if (Code = Ord('R')) and (FEmulation <> nil) then
+    else if (Code = Ord('R')) and (FEmulation <> nil) and not SuborKeyboardActive then
     begin
       TimerUpdate.Enabled := False;
       try
@@ -516,7 +563,7 @@ begin
         raise;
       end;
     end
-    else if (Code in [vkF5, vkF6]) and (FEmulation <> nil) then
+    else if (Code in [vkF5, vkF6]) and (FEmulation <> nil) and not SuborKeyboardActive then
     begin
       try
         if Code = vkF5 then
@@ -529,7 +576,7 @@ begin
       end;
     end;
   end;
-  if not (ssCtrl in Shift) then
+  if SuborKeyboardActive or not (ssCtrl in Shift) then
     SetKeyState(Code, True);
   Key := 0;
   KeyChar := #0;
@@ -545,7 +592,8 @@ begin
   var Code: Word := EventKey(Key, KeyChar);
   if Code <= High(FKeysDown) then
     FKeysDown[Code] := False;
-  SetKeyState(Code, False);
+  if ((FEmulation <> nil) and FEmulation.UsesSuborKeyboard) or not (ssCtrl in Shift) then
+    SetKeyState(Code, False);
   Key := 0;
   KeyChar := #0;
 end;
@@ -600,6 +648,8 @@ begin
   end;
   if FGamepad <> nil then
     FGamepad.ReleaseAll;
+  if FSuborKeyboard <> nil then
+    FSuborKeyboard.ReleaseAll;
   TimerUpdate.Enabled := False;
   FreeAndNil(FEmulation); // Join before replacing the session.
   FEmulation := NewEmulation;

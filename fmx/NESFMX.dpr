@@ -4,6 +4,7 @@ uses
   System.StartUpCopy,
   FMX.Forms,
   NES.Gamepad in 'NES.Gamepad.pas',
+  NES.SuborKeyboard in 'NES.SuborKeyboard.pas',
   NES.Main in 'NES.Main.pas' {FormMain},
   {$IFDEF ANDROID}
   NES.RomPicker.Android in 'NES.RomPicker.Android.pas',
