@@ -603,7 +603,7 @@ begin
       end;
     $33: // INC SP
       begin
-        Inc(StackPointer);
+        StackPointer := (Integer(StackPointer) + 1) and $FFFF;
         ConsumeClockCycles(8);
       end;
     $0b: // DEC BC
@@ -623,7 +623,7 @@ begin
       end;
     $3b: // DEC SP
       begin
-        Dec(StackPointer);
+        StackPointer := (Integer(StackPointer) - 1) and $FFFF;
         ConsumeClockCycles(8);
       end;
     $04, $0c, $14, $1c, $24, $2c, $34, $3c:
@@ -1722,9 +1722,11 @@ end;
 function TGBCPU.PopWord: Integer;
 begin
   var Low: Integer := FMemory.ReadByte(StackPointer);
-  StackPointer := StackPointer + 1;
+  // The LR35902 stack is a 16-bit address bus and wraps at both ends.
+  // Widen first so range checking accepts the valid $FFFF -> $0000 wrap.
+  StackPointer := (Integer(StackPointer) + 1) and $FFFF;
   var High: Integer := FMemory.ReadByte(StackPointer);
-  StackPointer := StackPointer + 1;
+  StackPointer := (Integer(StackPointer) + 1) and $FFFF;
   High := High shl 8;
   Result := High or Low;
 end;
@@ -1796,9 +1798,9 @@ end;
 
 procedure TGBCPU.PushWord(Value: Integer);
 begin
-  StackPointer := StackPointer - 1;
+  StackPointer := (Integer(StackPointer) - 1) and $FFFF;
   FMemory.WriteByte(StackPointer, (Value and $FF00) shr 8);
-  StackPointer := StackPointer - 1;
+  StackPointer := (Integer(StackPointer) - 1) and $FFFF;
   FMemory.WriteByte(StackPointer, Value and $00FF);
 end;
 

@@ -1,4 +1,4 @@
-unit Core.Adapter.GBC;
+﻿unit Core.Adapter.GBC;
 
 interface
 

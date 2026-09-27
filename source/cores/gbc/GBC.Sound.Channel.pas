@@ -1,4 +1,4 @@
-unit GBC.Sound.Channel;
+﻿unit GBC.Sound.Channel;
 
 interface
 

@@ -1,4 +1,4 @@
-unit GBC.Joypad;
+﻿unit GBC.Joypad;
 
 interface
 

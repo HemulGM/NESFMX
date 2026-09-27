@@ -1,4 +1,4 @@
-unit GBC.Timer;
+﻿unit GBC.Timer;
 
 interface
 

@@ -1,4 +1,4 @@
-unit Core.EmulatorFactory;
+﻿unit Core.EmulatorFactory;
 
 interface
 

@@ -1,4 +1,4 @@
-unit GBC.MBC;
+﻿unit GBC.MBC;
 
 interface
 

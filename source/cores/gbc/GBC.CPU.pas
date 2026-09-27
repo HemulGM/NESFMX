@@ -1,4 +1,4 @@
-unit GBC.CPU;
+﻿unit GBC.CPU;
 
 interface
 
@@ -612,7 +612,7 @@ begin
       end;
     $33: // INC SP
       begin
-        Inc(StackPointer);
+        StackPointer := (Integer(StackPointer) + 1) and $FFFF;
         ConsumeClockCycles(8);
       end;
     $0b: // DEC BC
@@ -632,7 +632,7 @@ begin
       end;
     $3b: // DEC SP
       begin
-        Dec(StackPointer);
+        StackPointer := (Integer(StackPointer) - 1) and $FFFF;
         ConsumeClockCycles(8);
       end;
     $04, $0c, $14, $1c, $24, $2c, $34, $3c:
@@ -1807,9 +1807,9 @@ end;
 
 procedure TGBCCPU.PushWord(Value: Integer);
 begin
-  StackPointer := StackPointer - 1;
+  StackPointer := (Integer(StackPointer) - 1) and $FFFF;
   FMemory.WriteByte(StackPointer, (Value and $FF00) shr 8);
-  StackPointer := StackPointer - 1;
+  StackPointer := (Integer(StackPointer) - 1) and $FFFF;
   FMemory.WriteByte(StackPointer, Value and $00FF);
 end;
 

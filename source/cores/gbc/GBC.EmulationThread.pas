@@ -1,4 +1,4 @@
-unit GBC.EmulationThread;
+﻿unit GBC.EmulationThread;
 
 interface
 

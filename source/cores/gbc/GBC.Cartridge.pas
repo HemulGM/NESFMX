@@ -1,4 +1,4 @@
-unit GBC.Cartridge;
+﻿unit GBC.Cartridge;
 
 interface
 
