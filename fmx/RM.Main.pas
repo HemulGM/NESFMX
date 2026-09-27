@@ -5,15 +5,14 @@ interface
 uses
   System.SysUtils, System.Classes, System.Types, System.UITypes, FMX.Forms,
   FMX.Types, FMX.Controls, FMX.Objects, FMX.Graphics, FMX.Dialogs, NES.Consts,
-  NES.Controller, Core.Emulation, Core.EmulatorFactory, Core.NesAdapter,
-  FMX.Controls.Presentation, FMX.StdCtrls, FMX.Layouts, NES.Gamepad,
-  NES.SuborKeyboard
+  NES.Controller, Core.Emulation, Core.EmulatorFactory,
+  FMX.Controls.Presentation, FMX.StdCtrls, FMX.Layouts, NES.SuborKeyboard,
   {$IFDEF ANDROID}
-    , Androidapi.Helpers, Androidapi.JNI.GraphicsContentViewText,
-    Androidapi.JNI.App, Androidapi.JNI.Widget, Androidapi.JNI.Os,
-    Androidapi.JNI.Media, FMX.Platform, FMX.ApplicationEvents,
-    NES.RomPicker.Android
-  {$ENDIF};
+  Androidapi.Helpers, Androidapi.JNI.GraphicsContentViewText, Androidapi.JNI.App,
+  Androidapi.JNI.Widget, Androidapi.JNI.Os, Androidapi.JNI.Media, FMX.Platform,
+  FMX.ApplicationEvents, RM.RomPicker.Android,
+  {$ENDIF}
+  NES.Gamepad;
 
 type
   TFormMain = class(TForm)
@@ -75,7 +74,7 @@ var
 implementation
 
 uses
-  System.IOUtils;
+  System.IOUtils, Core.Adapter.NES;
 
 {$R *.fmx}
 
@@ -186,23 +185,18 @@ begin
 end;
 
 procedure TFormMain.ResizeClientArea;
-{$IFNDEF ANDROID}
-var
-  CanvasHeight: Single;
-  Scale: Integer;
 begin
-  Scale := 2;
+  {$IFNDEF ANDROID}
+  var Scale := 2;
   if FEmulation <> nil then
     Scale := FEmulation.Config.Scale;
   ClientWidth := NES_WIDTH * Scale;
-  CanvasHeight := NES_HEIGHT * Scale;
+  var CanvasHeight := NES_HEIGHT * Scale;
   ClientHeight := Trunc(Padding.Top + LayoutHead.Height + CanvasHeight +
     InputControlHeight(CanvasHeight) + Padding.Bottom);
+  {$ELSE}
+  {$ENDIF}
 end;
-{$ELSE}
-begin
-end;
-{$ENDIF}
 
 procedure TFormMain.GamepadChanged(Sender: TObject);
 begin

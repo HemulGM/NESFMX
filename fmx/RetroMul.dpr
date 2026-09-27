@@ -9,7 +9,7 @@ uses
   NES.SuborKeyboard in 'NES.SuborKeyboard.pas',
   RM.Main in 'RM.Main.pas' {FormMain},
   {$IFDEF ANDROID}
-  NES.RomPicker.Android in 'NES.RomPicker.Android.pas',
+  RM.RomPicker.Android in 'RM.RomPicker.Android.pas',
   {$ENDIF }
   {$IF Defined(ANDROID) and not Defined(NES_AUDIO_NULL)}
   PCM.Audio.Android.AudioTrack in '..\source\pcm\PCM.Audio.Android.AudioTrack.pas',

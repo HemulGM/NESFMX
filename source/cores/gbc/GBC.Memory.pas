@@ -32,8 +32,12 @@ type
     FWRAMBank: Byte;
     FPrepareSpeedSwitch: Boolean;
     FDoubleSpeed: Boolean;
+    FHDMAActive: Boolean;
+    FHDMASource, FHDMADestination, FHDMARemainingBlocks: Integer;
+    FDMACyclePenalty: Integer;
     FWRAMBanks: array[1..7, 0..$FFF] of Byte;
     procedure ExecuteGeneralHDMA(Control: Byte);
+    procedure ExecuteHDMABlock;
     function ProcessUnusedBits(Address, Value: Integer): Integer;
   public
     // 0000-3FFF   16KB ROM Bank 00     (in cartridge, fixed at bank 00)
@@ -70,6 +74,7 @@ type
     function GetROMBank: Integer;
     function IsCGBMode: Boolean;
     function PerformSpeedSwitch: Boolean;
+    function ConsumeDMACyclePenalty: Integer;
     procedure InitializeMemory;
     constructor Create(AMbc: TGBCMBC; AGPU: TGBCGPU); overload;
   end;
@@ -77,20 +82,58 @@ type
 implementation
 
 procedure TGBCMemory.ExecuteGeneralHDMA(Control: Byte);
-var
-  SourceAddress, DestinationAddress, Length, I: Integer;
 begin
-  // FF51-FF55.  The CGB general transfer copies 16-byte blocks immediately.
-  // HBlank DMA is accepted here as a general transfer too; this preserves the
-  // data path for games that use it during loading screens.
-  SourceAddress := (IOPort[$51] shl 8) or (IOPort[$52] and $F0);
-  DestinationAddress := $8000 or ((IOPort[$53] and $1F) shl 8) or
+  // A write with bit 7 clear cancels an active HBlank transfer. The readback
+  // reports the number of untransferred blocks with bit 7 set.
+  if FHDMAActive and ((Control and $80) = 0) then
+  begin
+    FHDMAActive := False;
+    IOPort[$55] := $80 or (FHDMARemainingBlocks - 1);
+    Exit;
+  end;
+
+  FHDMASource := (IOPort[$51] shl 8) or (IOPort[$52] and $F0);
+  FHDMADestination := $8000 or ((IOPort[$53] and $1F) shl 8) or
     (IOPort[$54] and $F0);
-  Length := ((Control and $7F) + 1) * $10;
-  for I := 0 to Length - 1 do
-    WriteByte((DestinationAddress + I) and $9FFF,
-      ReadByte((SourceAddress + I) and $FFFF));
-  IOPort[$55] := $FF;
+  FHDMARemainingBlocks := (Control and $7F) + 1;
+  // HBlank does not exist with the LCD disabled.  On real CGB hardware a
+  // request with bit 7 set in that state is therefore performed immediately
+  // as a general transfer.  Leaving it pending makes the transfer overwrite
+  // visible tile data after the game enables the LCD.
+  FHDMAActive := ((Control and $80) <> 0) and
+    ((FGPU.GetLCDControl and $80) <> 0);
+  if FHDMAActive then
+    IOPort[$55] := FHDMARemainingBlocks - 1
+  else
+    while FHDMARemainingBlocks > 0 do
+      ExecuteHDMABlock;
+end;
+
+procedure TGBCMemory.ExecuteHDMABlock;
+begin
+  if FHDMARemainingBlocks <= 0 then
+    Exit;
+  for var I := 0 to $0F do
+    FGPU.WriteVRAM((FHDMADestination + I) and $1FFF,
+      ReadByte((FHDMASource + I) and $FFFF));
+  // A 16-byte CGB DMA block occupies the CPU bus for eight machine cycles
+  // (32 normal-speed clock cycles).  Peripheral time still advances while
+  // the CPU is paused, so the CPU consumes this after the current operation.
+  Inc(FDMACyclePenalty, 32);
+  Inc(FHDMASource, $10);
+  FHDMADestination := $8000 or ((FHDMADestination + $10) and $1FFF);
+  Dec(FHDMARemainingBlocks);
+  IOPort[$51] := (FHDMASource shr 8) and $FF;
+  IOPort[$52] := FHDMASource and $F0;
+  IOPort[$53] := (FHDMADestination shr 8) and $1F;
+  IOPort[$54] := FHDMADestination and $F0;
+  if FHDMARemainingBlocks = 0 then
+  begin
+    FHDMAActive := False;
+    IOPort[$55] := $FF;
+  end
+  else
+    IOPort[$55] := FHDMARemainingBlocks - 1;
 end;
 
 { TGBMemory }
@@ -102,6 +145,10 @@ begin
   FWRAMBank := 1;
   FPrepareSpeedSwitch := False;
   FDoubleSpeed := False;
+  FHDMAActive := False;
+  FHDMARemainingBlocks := 0;
+  FDMACyclePenalty := 0;
+  FGPU.SetHBlankCallback(ExecuteHDMABlock);
   UseBIOS := True;
   InitializeMemory;
 end;
@@ -124,6 +171,12 @@ begin
     FDoubleSpeed := not FDoubleSpeed;
     FPrepareSpeedSwitch := False;
   end;
+end;
+
+function TGBCMemory.ConsumeDMACyclePenalty: Integer;
+begin
+  Result := FDMACyclePenalty;
+  FDMACyclePenalty := 0;
 end;
 
 procedure TGBCMemory.InitializeMemory;
@@ -225,7 +278,12 @@ begin
     Result := FMBC.MbcRead(Address);
   end
   else if (Address >= $8000) and (Address <= $9fff) then
-    Result := FGPU.ReadVRAM(Address - $8000)
+  begin
+    if FGPU.CanAccessVRAM then
+      Result := FGPU.ReadVRAM(Address - $8000)
+    else
+      Result := $FF;
+  end
   else if (Address >= $a000) and (Address <= $bfff) then
     Result := FMBC.MbcRead(Address)
   else if (Address >= $c000) and (Address <= $cfff) then
@@ -316,7 +374,8 @@ begin
 
   if (Address >= $8000) and (Address <= $9FFF) then
   begin
-    FGPU.WriteVRAM(Address - $8000, Value);
+    if FGPU.CanAccessVRAM then
+      FGPU.WriteVRAM(Address - $8000, Value);
   end;
 
   if (Address >= $C000) and (Address <= $CFFF) then
@@ -443,4 +502,3 @@ begin
 end;
 
 end.
-

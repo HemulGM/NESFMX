@@ -460,12 +460,16 @@ end;
 
 procedure TGBCCPU.ConsumeClockCycles(Cycles: Integer);
 begin
-  Inc(FCycles, Cycles);
-
-  TGBCTimer.Instance.Step(Cycles);
-  FGPU.Step(Cycles);
-  if FSound <> nil then
-    FSound.UpdateSound(Cycles);
+  repeat
+    Inc(FCycles, Cycles);
+    TGBCTimer.Instance.Step(Cycles);
+    FGPU.Step(Cycles);
+    if FSound <> nil then
+      FSound.UpdateSound(Cycles);
+    // General DMA queues its stall while the CPU instruction writes FF55;
+    // HBlank DMA queues it from the GPU mode transition above.
+    Cycles := FMemory.ConsumeDMACyclePenalty;
+  until Cycles = 0;
 end;
 
 procedure TGBCCPU.ExecuteCP(OpCode: Byte);
@@ -1727,9 +1731,11 @@ end;
 function TGBCCPU.PopWord: Integer;
 begin
   var Low: Integer := FMemory.ReadByte(StackPointer);
-  StackPointer := StackPointer + 1;
+  // The Game Boy stack wraps across $FFFF->$0000.  Widen before adding so
+  // Delphi range checks do not reject the valid 16-bit wrap.
+  StackPointer := (Integer(StackPointer) + 1) and $FFFF;
   var High: Integer := FMemory.ReadByte(StackPointer);
-  StackPointer := StackPointer + 1;
+  StackPointer := (Integer(StackPointer) + 1) and $FFFF;
   High := High shl 8;
   Result := High or Low;
 end;
@@ -2679,4 +2685,3 @@ begin
 end;
 
 end.
-

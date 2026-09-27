@@ -425,7 +425,7 @@
         <DCCReference Include="RM.Main.pas">
             <Form>FormMain</Form>
         </DCCReference>
-        <DCCReference Include="NES.RomPicker.Android.pas"/>
+        <DCCReference Include="RM.RomPicker.Android.pas"/>
         <DCCReference Include="..\source\pcm\PCM.Audio.Android.AudioTrack.pas"/>
         <DCCReference Include="..\source\pcm\PCM.Audio.Windows.MMSystem.pas"/>
         <DCCReference Include="..\source\pcm\PCM.Audio.Linux.Alsa.pas"/>
