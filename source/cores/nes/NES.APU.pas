@@ -185,6 +185,8 @@ begin
   State.Field(FHp90Coefficient, SizeOf(FHp90Coefficient));
   State.Field(FHp440Coefficient, SizeOf(FHp440Coefficient));
   State.Field(FLp14Coefficient, SizeOf(FLp14Coefficient));
+  // Rebuild derived coefficients, including when loading older snapshots.
+  SetSampleRate(FSampleRate);
 end;
 
 const
@@ -280,7 +282,10 @@ begin
   FHp90Coefficient := Rc / (Rc + Dt);
   Rc := 1.0 / (2.0 * Pi * 440.0);
   FHp440Coefficient := Rc / (Rc + Dt);
-  Rc := 1.0 / (2.0 * Pi * 14000.0);
+  // Filter the CPU-rate mixer BEFORE decimation. At lower output rates,
+  // lower the cutoff as well so ultrasonic content cannot freely alias.
+  Dt := 1.0 / CpuFrequency(FRegion);
+  Rc := 1.0 / (2.0 * Pi * Min(14000.0, FSampleRate * 0.3));
   FLp14Coefficient := Dt / (Rc + Dt);
 end;
 
@@ -615,8 +620,7 @@ begin
   FHp90Input := Value;
   FHp440Output := FHp440Coefficient * (FHp440Output + FHp90Output - FHp440Input);
   FHp440Input := FHp90Output;
-  FLp14Output := FLp14Output + FLp14Coefficient * (FHp440Output - FLp14Output);
-  Result := FLp14Output;
+  Result := FHp440Output;
 end;
 
 function TApu.MixSample: Double;
@@ -851,11 +855,14 @@ begin
   else
     Dec(FTriangle.Timer);
 
+  // An output-rate low-pass cannot remove frequencies that have already
+  // folded into the audible band. Keep its history at the APU clock rate.
+  FLp14Output := FLp14Output + FLp14Coefficient * (MixSample - FLp14Output);
   FSampleTimer := FSampleTimer + 1.0;
   while FSampleTimer >= FSampleStep do
   begin
     FSampleTimer := FSampleTimer - FSampleStep;
-    Sample := FilterSample(MixSample);
+    Sample := FilterSample(FLp14Output);
     if IsNan(Sample) or IsInfinite(Sample) then
       Sample := 0;
     if Sample > 1 then

@@ -1,4 +1,4 @@
-﻿unit GBC.Joypad;
+unit GBC.Joypad;
 
 interface
 
@@ -17,15 +17,9 @@ type
       FInstance: TGBCJoypad;
     class function GetInstance: TGBCJoypad; static;
   private
-    FAPressed: Boolean;
-    FBPressed: Boolean;
-    FStartPressed: Boolean;
-    FSelectPressed: Boolean;
-    FUpPressed: Boolean;
-    FDownPressed: Boolean;
-    FLeftPressed: Boolean;
-    FRightPressed: Boolean;
-    FDPadSelected: Boolean;
+    FPressed: set of TGBCKey;
+    FSelection: Integer;
+    procedure CheckInterrupt(Previous: Integer);
   public
     KeyBindings: array[TGBCKey] of Integer;
     constructor Create; overload;
@@ -43,14 +37,8 @@ implementation
 
 constructor TGBCJoypad.Create;
 begin
-  FAPressed := False;
-  FBPressed := False;
-  FStartPressed := False;
-  FSelectPressed := False;
-  FUpPressed := False;
-  FDownPressed := False;
-  FLeftPressed := False;
-  FRightPressed := False;
+  inherited;
+  FSelection := $30;
 
   KeyBindings[TGBCKey.Up] := 87;
   KeyBindings[TGBCKey.Down] := 83;
@@ -63,140 +51,45 @@ begin
   KeyBindings[TGBCKey.Start] := 88;
 end;
 
+procedure TGBCJoypad.CheckInterrupt(Previous: Integer);
+begin
+  if (Previous and not GetPressedKeys and $0F) <> 0 then
+    TGBCInterruptManager.Instance.RaiseInterruptByIndex(0);
+end;
+
 procedure TGBCJoypad.KeyDown(Key: Integer);
 begin
-  if Key = KeyBindings[TGBCKey.A] then
-  begin
-    if not FDPadSelected then
-      TGBCInterruptManager.Instance.RaiseInterruptByIndex(0); //JoyPad_Input
-    FAPressed := True;
-  end
-  else if Key = KeyBindings[TGBCKey.B] then
-  begin
-    if not FDPadSelected then
-      TGBCInterruptManager.Instance.RaiseInterruptByIndex(0); //JoyPad_Input
-    FBPressed := True;
-  end
-  else if Key = KeyBindings[TGBCKey.Start] then
-  begin
-    if not FDPadSelected then
-      TGBCInterruptManager.Instance.RaiseInterruptByIndex(0); //JoyPad_Input
-    FStartPressed := True;
-  end
-  else if Key = KeyBindings[TGBCKey.Select] then
-  begin
-    if not FDPadSelected then
-      TGBCInterruptManager.Instance.RaiseInterruptByIndex(0); //JoyPad_Input
-    FSelectPressed := True;
-  end
-  else if Key = KeyBindings[TGBCKey.Up] then
-  begin
-    if FDPadSelected then
-      TGBCInterruptManager.Instance.RaiseInterruptByIndex(0); //JoyPad_Input
-    FUpPressed := True;
-  end
-  else if Key = KeyBindings[TGBCKey.Down] then
-  begin
-    if FDPadSelected then
-      TGBCInterruptManager.Instance.RaiseInterruptByIndex(0); //JoyPad_Input
-    FDownPressed := True;
-  end
-  else if Key = KeyBindings[TGBCKey.Left] then
-  begin
-    if FDPadSelected then
-      TGBCInterruptManager.Instance.RaiseInterruptByIndex(0); //JoyPad_Input
-    FLeftPressed := True;
-  end
-  else if Key = KeyBindings[TGBCKey.Right] then
-  begin
-    if FDPadSelected then
-      TGBCInterruptManager.Instance.RaiseInterruptByIndex(0); //JoyPad_Input
-    FRightPressed := True;
-  end;
+  var Previous := GetPressedKeys;
+  for var Button := Low(TGBCKey) to High(TGBCKey) do
+    if Key = KeyBindings[Button] then
+      Include(FPressed, Button);
+  CheckInterrupt(Previous);
 end;
 
 procedure TGBCJoypad.KeyUp(Key: Integer);
 begin
-  if Key = KeyBindings[TGBCKey.A] then
-  begin
-    FAPressed := False;
-  end
-  else if Key = KeyBindings[TGBCKey.B] then
-  begin
-    FBPressed := False;
-  end
-  else if Key = KeyBindings[TGBCKey.Start] then
-  begin
-    FStartPressed := False;
-  end
-  else if Key = KeyBindings[TGBCKey.Select] then
-  begin
-    FSelectPressed := False;
-  end
-  else if Key = KeyBindings[TGBCKey.Up] then
-  begin
-    FUpPressed := False;
-  end
-  else if Key = KeyBindings[TGBCKey.Down] then
-  begin
-    FDownPressed := False;
-  end
-  else if Key = KeyBindings[TGBCKey.Left] then
-  begin
-    FLeftPressed := False;
-  end
-  else if Key = KeyBindings[TGBCKey.Right] then
-  begin
-    FRightPressed := False;
-  end;
+  for var Button := Low(TGBCKey) to High(TGBCKey) do
+    if Key = KeyBindings[Button] then
+      Exclude(FPressed, Button);
 end;
 
 function TGBCJoypad.GetPressedKeys: Integer;
 begin
-  var Retval: Integer := $CF;
-  if (FDPadSelected) then
+  Result := $CF or FSelection;
+  if (FSelection and $10) = 0 then
   begin
-    Retval := Retval or $20;
-    if FDownPressed then       // Bit 3 - P13 Input Down  (0=Pressed)
-      Retval := Retval and $F7
-    else
-      Retval := Retval and $FF;
-    if FUpPressed then         // Bit 2 - P12 Input Up    (0=Pressed)
-      Retval := Retval and $FB
-    else
-      Retval := Retval and $FF;
-
-    if FLeftPressed then       // Bit 1 - P11 Input Left  (0=Pressed)
-      Retval := Retval and $FD
-    else
-      Retval := Retval and $FF;
-    if FRightPressed then      // Bit 0 - P10 Input Right (0=Pressed)
-      Retval := Retval and $FE
-    else
-      Retval := Retval and $FF;
-  end
-  else
-  begin
-    Retval := Retval or $20;
-    if FStartPressed then      //  Bit 3 - P13 Input Start    (0=Pressed)
-      Retval := Retval and $F7
-    else
-      Retval := Retval and $FF;
-    if FSelectPressed then     //Bit 2 - P12 Input Select   (0=Pressed)
-      Retval := Retval and $FB
-    else
-      Retval := Retval and $FF;
-
-    if FBPressed then          //Bit 1 - P11 Input Button B (0=Pressed)
-      Retval := Retval and $FD
-    else
-      Retval := Retval and $FF;
-    if FAPressed then          // Bit 0 - P10 Input Button A (0=Pressed)
-      Retval := Retval and $FE
-    else
-      Retval := Retval and $FF;
+    if TGBCKey.Right in FPressed then Result := Result and $FE;
+    if TGBCKey.Left in FPressed then Result := Result and $FD;
+    if TGBCKey.Up in FPressed then Result := Result and $FB;
+    if TGBCKey.Down in FPressed then Result := Result and $F7;
   end;
-  Result := Retval;
+  if (FSelection and $20) = 0 then
+  begin
+    if TGBCKey.A in FPressed then Result := Result and $FE;
+    if TGBCKey.B in FPressed then Result := Result and $FD;
+    if TGBCKey.Select in FPressed then Result := Result and $FB;
+    if TGBCKey.Start in FPressed then Result := Result and $F7;
+  end;
 end;
 
 class function TGBCJoypad.GetInstance: TGBCJoypad;
@@ -213,12 +106,9 @@ end;
 
 procedure TGBCJoypad.SetSelection(Value: Integer);
 begin
-  Value := Value and $30;
-  if Value = $20 then
-    FDPadSelected := True
-  else if Value = $10 then
-    FDPadSelected := False;
+  var Previous := GetPressedKeys;
+  FSelection := Value and $30;
+  CheckInterrupt(Previous);
 end;
 
 end.
-

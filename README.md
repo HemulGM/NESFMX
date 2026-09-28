@@ -1,6 +1,7 @@
-# NESFMX — Delphi / FireMonkey
+# RetroMul — Delphi / FireMonkey
 
-A Delphi NES emulator with an FMX interface. 47 mapper numbers are supported:
+A Delphi multi-system emulator with an FMX interface for NES, Game Boy and Game Boy Color.
+For NES, 47 mapper numbers are supported:
 NROM, MMC1–MMC5, UxROM, CNROM, AxROM, Color Dreams, GxROM, Bandai, VRC,
 Sunsoft, RAMBO-1, Namco 108, JY and other boards from the proven ROM collection.
 A list of implementations, test results, and limitations are provided in
@@ -33,17 +34,17 @@ without changing the ROM on the disk. There is no full support for NES 2.0 exten
 
 ## Assembly
 
-Open `fmx/NESFMX.dproj` in RAD Studio with Delphi FMX support, select
-Win32 or Win64 and run Build. The form `fmx/NES.Main.fmx` is available for
+Open `fmx/RetroMul.dproj` in RAD Studio with Delphi FMX support, select
+Win32 or Win64 and run Build. The form `fmx/RM.Main.fmx` is available for
 visual editing. Sources are grouped by responsibility:
 
 ```
 source/
-  pcm/             shared platform audio backend
+  PCM/             shared platform audio backend (Git submodule)
   cores/
     Core.Emulation.pas       frontend/core contract
-    Core.NesAdapter.pas      NES adapter
-    Core.GameBoyAdapter.pas  Game Boy adapter
+    Core.Adapter.NES.pas      NES adapter
+    Core.Adapter.GB.pas  Game Boy adapter
     nes/
       mappers/
     gb/
@@ -53,22 +54,22 @@ source/
 logical eight-button input state and produces a size-tagged, row-major FMX
 frame. Platform-specific settings stay in the adapter, so a future core only
 needs an adapter plus a folder under `source/cores/`. The current frontend
-selects NES for `.nes` and Game Boy for `.gb`/`.gbc` ROMs. Game Boy save states
-and reset are deliberately reported as unsupported until that core implements
-them.
+selects NES for .nes, Game Boy for .gb, and Game Boy Color for .gbc ROMs.
+All three adapters support reset. GB/GBC save states remain unsupported.
+See [the multi-system audit](MULTICORE_AUDIT.md) for regression checks and remaining limitations.
 Overflow and range checks are included in Debug and Release.
 Tested with Delphi 13 / compiler 37.0.
 
-The audio subsystem is separate from the platform API: `NES.Audio` provides a common
-facade, `NES.Audio.Windows` implements output via WaveOut, `NES.Audio.Linux` via
-ALSA, `NES.Audio.Android` via AudioTrack, and `NES.Audio.Apple.AudioQueue` via
-AudioToolbox on macOS/iOS. Unsupported platforms use `NES.Audio.Null`:
+The audio subsystem is separate from the platform API: `PCM.Audio` provides a common
+facade, `PCM.Audio.Windows.MMSystem` implements output via WaveOut, `PCM.Audio.Linux.Alsa` via
+ALSA, `PCM.Audio.Android.AudioTrack` via AudioTrack, and `PCM.Audio.Apple.AudioQueue` via
+AudioToolbox on macOS/iOS. Unsupported platforms use `PCM.Audio.Null`:
 emulation continues without sound, with the reason available through `Audio.Error`.
 
 ### macOS and iOS audio
 
-The factory automatically selects `TNesAppleAudioBackend` for Apple targets,
-unless `NES_AUDIO_NULL` is defined. AudioToolbox is a system framework; no
+The factory automatically selects `TPCMAudioBackendApple` for Apple targets,
+unless `PCM_AUDIO_NULL` is defined. AudioToolbox is a system framework; no
 third-party audio library or microphone permission is required for playback.
 Build with the appropriate Delphi Apple SDK and deploy through PAServer.
 
@@ -118,7 +119,7 @@ inside the platform module.
 The 'NES.Emulation` thread creates, uses, and releases a device in its
 `Execute'; the implementation itself synchronizes native callbacks and stops
 them before releasing buffers. For tests, you can pass your own backend
-to `TNesAudio.Create(Backend)`. The conditional character `NES_AUDIO_NULL` selects
+to `TNesAudio.Create(Backend)`. The conditional character `PCM_AUDIO_NULL` selects
 the device-free mode on any OS, including Windows; in it, samples are counted as
 discarded, `DeviceOpen` and `PositionKnown` remain `False'.
 

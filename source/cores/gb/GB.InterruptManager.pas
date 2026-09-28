@@ -1,4 +1,4 @@
-﻿unit GB.InterruptManager;
+unit GB.InterruptManager;
 
 interface
 
@@ -108,11 +108,8 @@ end;
 
 procedure TGBInterruptManager.EnableInterruptByReg(RegisterValue: Integer);
 begin
-  if RegisterValue > $1F then
-  begin
-    FEnableRegisterUpperBits := RegisterValue and $E0;
-    RegisterValue := RegisterValue and $1F;
-  end;
+  FEnableRegisterUpperBits := RegisterValue and $E0;
+  RegisterValue := RegisterValue and $1F;
   for var i := 0 to High(FInterrupts) do
   begin
     FInterrupts[i].IsEnabled := (RegisterValue div FInterrupts[i].Bit) = 1;
@@ -172,11 +169,8 @@ end;
 
 procedure TGBInterruptManager.RaiseInterruptByReg(RegisterValue: Integer);
 begin
-  if RegisterValue > $1F then
-  begin
-    FFlagRegisterUpperBits := RegisterValue and $E0;
-    RegisterValue := RegisterValue and $1F;
-  end;
+  FFlagRegisterUpperBits := RegisterValue and $E0;
+  RegisterValue := RegisterValue and $1F;
   for var i := 0 to High(FInterrupts) do
   begin
     FInterrupts[i].IsRaised := (RegisterValue div FInterrupts[i].Bit) = 1;

@@ -1,4 +1,4 @@
-﻿unit GBC.ROM;
+unit GBC.ROM;
 
 interface
 
@@ -95,7 +95,8 @@ begin
   if Stream = nil then
     raise EArgumentNilException.Create('ROM stream must not be nil.');
   var DataSize: Int64 := Stream.Size;
-  if (DataSize < CartridgeHeaderSize) or (DataSize > MaxInt) then
+  if (DataSize < $8000) or (DataSize > 8 * 1024 * 1024) or
+    (DataSize mod $4000 <> 0) then
     raise EGBCInvalidROM.CreateFmt('Invalid ROM length: %d bytes.', [DataSize]);
   Stream.Position := 0;
   var Data: TBytes;

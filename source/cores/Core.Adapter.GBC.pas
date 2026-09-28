@@ -1,9 +1,9 @@
-﻿unit Core.Adapter.GBC;
+unit Core.Adapter.GBC;
 
 interface
 
 uses
-  System.IniFiles, Core.Emulation, GBC.EmulationThread, GBC.Joypad;
+  System.Classes, System.IniFiles, Core.Emulation, GBC.EmulationThread, GBC.Joypad;
 
 type
   TGBCKeyMap = record
@@ -32,8 +32,9 @@ type
   TGBCCoreAdapter = class(TInterfacedObject, IEmulationCore)
   private
     FThread: TGBCEmulationThread;
-    FFileName: string;
+    FROMData: TArray<Byte>;
     FGamepadInput: TEmulatorInput;
+    FKeyboardInput: TEmulatorInput;
     FConfig: IGBCEmulatorConfig;
     FFrameNumber: UInt64;
     procedure CreateThread;
@@ -63,20 +64,33 @@ type
 implementation
 
 uses
-  System.SysUtils, System.UITypes, GBC.GPU;
+  System.SysUtils, System.UITypes, GBC.GPU, GBC.ROM, GBC.MBC;
 
 constructor TGBCCoreAdapter.Create(const FileName: string);
 begin
   inherited Create;
   FConfig := TGBCEmulatorConfig.Create(EmulatorConfigFileName('gbc'));
   FConfig.Load;
-  FFileName := FileName;
+  var ROM := TGBCROM.Create;
+  try
+    var Stream := TFileStream.Create(FileName, fmOpenRead or fmShareDenyWrite);
+    try
+      ROM.ReadROM(Stream);
+    finally
+      Stream.Free;
+    end;
+    FROMData := ROM.ROMData;
+    // Validate mapper support before the frontend replaces the active session.
+    TGBCMBC.Create(ROM).Free;
+  finally
+    ROM.Free;
+  end;
   CreateThread;
 end;
 
 procedure TGBCCoreAdapter.CreateThread;
 begin
-  FThread := TGBCEmulationThread.Create(FFileName, FConfig.AudioEnabled);
+  FThread := TGBCEmulationThread.Create(FROMData, FConfig.AudioEnabled);
   FThread.SoundVolume := FConfig.AudioVolume;
 end;
 
@@ -94,12 +108,14 @@ const
     TGBCKey.A, TGBCKey.B, TGBCKey.Select, TGBCKey.Start);
 begin
   for var Button := Low(TEmulatorButton) to High(TEmulatorButton) do
-    FThread.SetKeyState(ButtonKeys[Button], Button in FGamepadInput.Buttons);
+    FThread.SetKeyState(ButtonKeys[Button],
+      (Button in FGamepadInput.Buttons) or (Button in FKeyboardInput.Buttons));
 end;
 
 procedure TGBCCoreAdapter.ClearInput;
 begin
   FGamepadInput := Default(TEmulatorInput);
+  FKeyboardInput := Default(TEmulatorInput);
   FThread.ReleaseKeys;
 end;
 
@@ -137,7 +153,7 @@ procedure TGBCCoreAdapter.Reset;
 begin
   // The Game Boy Color core has no in-place reset path. Recreate its worker so all
   // singleton CPU, GPU and memory state is returned to the power-on state.
-  FThread.Free;
+  FreeAndNil(FThread);
   CreateThread;
   FFrameNumber := 0;
   FThread.Start;
@@ -164,21 +180,46 @@ procedure TGBCCoreAdapter.SetKeyState(Code: UInt32; Pressed: Boolean);
 begin
   var Keys := FConfig.Keys;
   if Code = Keys.A then
-    FThread.SetKeyState(TGBCKey.A, Pressed);
+    if Pressed then
+      Include(FKeyboardInput.Buttons, TEmulatorButton.A)
+    else
+      Exclude(FKeyboardInput.Buttons, TEmulatorButton.A);
   if Code = Keys.B then
-    FThread.SetKeyState(TGBCKey.B, Pressed);
+    if Pressed then
+      Include(FKeyboardInput.Buttons, TEmulatorButton.B)
+    else
+      Exclude(FKeyboardInput.Buttons, TEmulatorButton.B);
   if Code = Keys.Select then
-    FThread.SetKeyState(TGBCKey.Select, Pressed);
+    if Pressed then
+      Include(FKeyboardInput.Buttons, TEmulatorButton.Select)
+    else
+      Exclude(FKeyboardInput.Buttons, TEmulatorButton.Select);
   if Code = Keys.Start then
-    FThread.SetKeyState(TGBCKey.Start, Pressed);
+    if Pressed then
+      Include(FKeyboardInput.Buttons, TEmulatorButton.Start)
+    else
+      Exclude(FKeyboardInput.Buttons, TEmulatorButton.Start);
   if Code = Keys.Up then
-    FThread.SetKeyState(TGBCKey.Up, Pressed);
+    if Pressed then
+      Include(FKeyboardInput.Buttons, TEmulatorButton.Up)
+    else
+      Exclude(FKeyboardInput.Buttons, TEmulatorButton.Up);
   if Code = Keys.Down then
-    FThread.SetKeyState(TGBCKey.Down, Pressed);
+    if Pressed then
+      Include(FKeyboardInput.Buttons, TEmulatorButton.Down)
+    else
+      Exclude(FKeyboardInput.Buttons, TEmulatorButton.Down);
   if Code = Keys.Left then
-    FThread.SetKeyState(TGBCKey.Left, Pressed);
+    if Pressed then
+      Include(FKeyboardInput.Buttons, TEmulatorButton.Left)
+    else
+      Exclude(FKeyboardInput.Buttons, TEmulatorButton.Left);
   if Code = Keys.Right then
-    FThread.SetKeyState(TGBCKey.Right, Pressed);
+    if Pressed then
+      Include(FKeyboardInput.Buttons, TEmulatorButton.Right)
+    else
+      Exclude(FKeyboardInput.Buttons, TEmulatorButton.Right);
+  ApplyInput;
 end;
 
 procedure TGBCCoreAdapter.Start;
@@ -245,14 +286,14 @@ end;
 
 procedure TGBCEmulatorConfig.LoadCoreSettings(Ini: TIniFile);
 begin
-  FKeys.A := Ini.ReadInteger('Controls', 'A', FKeys.A);
-  FKeys.B := Ini.ReadInteger('Controls', 'B', FKeys.B);
-  FKeys.Select := Ini.ReadInteger('Controls', 'Select', FKeys.Select);
-  FKeys.Start := Ini.ReadInteger('Controls', 'Start', FKeys.Start);
-  FKeys.Up := Ini.ReadInteger('Controls', 'Up', FKeys.Up);
-  FKeys.Down := Ini.ReadInteger('Controls', 'Down', FKeys.Down);
-  FKeys.Left := Ini.ReadInteger('Controls', 'Left', FKeys.Left);
-  FKeys.Right := Ini.ReadInteger('Controls', 'Right', FKeys.Right);
+  FKeys.A := ReadEmulatorKey(Ini, 'Controls', 'A', FKeys.A);
+  FKeys.B := ReadEmulatorKey(Ini, 'Controls', 'B', FKeys.B);
+  FKeys.Select := ReadEmulatorKey(Ini, 'Controls', 'Select', FKeys.Select);
+  FKeys.Start := ReadEmulatorKey(Ini, 'Controls', 'Start', FKeys.Start);
+  FKeys.Up := ReadEmulatorKey(Ini, 'Controls', 'Up', FKeys.Up);
+  FKeys.Down := ReadEmulatorKey(Ini, 'Controls', 'Down', FKeys.Down);
+  FKeys.Left := ReadEmulatorKey(Ini, 'Controls', 'Left', FKeys.Left);
+  FKeys.Right := ReadEmulatorKey(Ini, 'Controls', 'Right', FKeys.Right);
 end;
 
 procedure TGBCEmulatorConfig.SaveCoreSettings(Ini: TIniFile);

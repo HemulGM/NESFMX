@@ -11,22 +11,22 @@ uses
   {$IFDEF ANDROID}
   RM.RomPicker.Android in 'RM.RomPicker.Android.pas',
   {$ENDIF }
-  {$IF Defined(ANDROID) and not Defined(NES_AUDIO_NULL)}
-  PCM.Audio.Android.AudioTrack in '..\source\pcm\PCM.Audio.Android.AudioTrack.pas',
+  {$IF Defined(ANDROID) and not Defined(PCM_AUDIO_NULL)}
+  PCM.Audio.Android.AudioTrack in '..\source\PCM\PCM.Audio.Android.AudioTrack.pas',
   {$ENDIF }
-  {$IF Defined(MSWINDOWS) and not Defined(NES_AUDIO_NULL)}
-  PCM.Audio.Windows.MMSystem in '..\source\pcm\PCM.Audio.Windows.MMSystem.pas',
+  {$IF Defined(MSWINDOWS) and not Defined(PCM_AUDIO_NULL)}
+  PCM.Audio.Windows.MMSystem in '..\source\PCM\PCM.Audio.Windows.MMSystem.pas',
   {$ENDIF }
-  {$IF Defined(LINUX) and not Defined(ANDROID) and not Defined(NES_AUDIO_NULL)}
-  PCM.Audio.Linux.Alsa in '..\source\pcm\PCM.Audio.Linux.Alsa.pas',
+  {$IF Defined(LINUX) and not Defined(ANDROID) and not Defined(PCM_AUDIO_NULL)}
+  PCM.Audio.Linux.Alsa in '..\source\PCM\PCM.Audio.Linux.Alsa.pas',
   {$ENDIF }
-  {$IF (Defined(MACOS) or Defined(IOS)) and not Defined(NES_AUDIO_NULL)}
-  PCM.Audio.Apple.AudioQueue in '..\source\pcm\PCM.Audio.Apple.AudioQueue.pas',
+  {$IF (Defined(MACOS) or Defined(IOS)) and not Defined(PCM_AUDIO_NULL)}
+  PCM.Audio.Apple.AudioQueue in '..\source\PCM\PCM.Audio.Apple.AudioQueue.pas',
   {$ENDIF }
-  PCM.Audio.Null in '..\source\pcm\PCM.Audio.Null.pas',
-  PCM.Audio.Factory in '..\source\pcm\PCM.Audio.Factory.pas',
-  PCM.Audio in '..\source\pcm\PCM.Audio.pas',
-  PCM.Audio.Backend in '..\source\pcm\PCM.Audio.Backend.pas',
+  PCM.Audio.Null in '..\source\PCM\PCM.Audio.Null.pas',
+  PCM.Audio.Factory in '..\source\PCM\PCM.Audio.Factory.pas',
+  PCM.Audio in '..\source\PCM\PCM.Audio.pas',
+  PCM.Audio.Backend in '..\source\PCM\PCM.Audio.Backend.pas',
   Core.Emulation in '..\source\cores\Core.Emulation.pas',
   Core.EmulatorFactory in '..\source\cores\Core.EmulatorFactory.pas',
   Core.Adapter.NES in '..\source\cores\Core.Adapter.NES.pas',

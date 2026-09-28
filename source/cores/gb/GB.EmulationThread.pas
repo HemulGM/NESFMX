@@ -1,4 +1,4 @@
-﻿unit GB.EmulationThread;
+unit GB.EmulationThread;
 
 interface
 
@@ -15,7 +15,7 @@ type
   // Run one session at a time: the core's timer, joypad and interrupts are singletons.
   TGBEmulationThread = class(TThread)
   private
-    FFileName: string;
+    FROMData: TArray<Byte>;
     FEnableAudio: Boolean;
     FLock: TCriticalSection;
     FStopEvent: TEvent;
@@ -35,7 +35,8 @@ type
   protected
     procedure Execute; override;
   public
-    constructor Create(const FileName: string; EnableAudio: Boolean = True);
+    constructor Create(const FileName: string; EnableAudio: Boolean = True); overload;
+    constructor Create(const ROMData: TArray<Byte>; EnableAudio: Boolean = True); overload;
     destructor Destroy; override;
     procedure RequestStop;
     procedure RequestPause;
@@ -51,15 +52,21 @@ type
 implementation
 
 uses
-  System.SysUtils, GB.ROM, GB.MBC, GB.Memory, GB.CPU,
+  System.SysUtils, System.IOUtils, GB.ROM, GB.MBC, GB.Memory, GB.CPU,
   GB.Sound, GB.Timer, GB.InterruptManager;
 
 constructor TGBEmulationThread.Create(const FileName: string; EnableAudio: Boolean);
 begin
+  Create(TFile.ReadAllBytes(FileName), EnableAudio);
+end;
+
+constructor TGBEmulationThread.Create(const ROMData: TArray<Byte>; EnableAudio: Boolean);
+begin
   inherited Create(True);
   FreeOnTerminate := False;
-  FFileName := FileName;
+  FROMData := Copy(ROMData);
   FEnableAudio := EnableAudio;
+  FSoundVolume := 0.5;
   FLock := TCriticalSection.Create;
   FStopEvent := TEvent.Create(nil, True, False, '');
   FInputEvents := TQueue<TGBInputEvent>.Create;
@@ -219,7 +226,7 @@ begin
   try
     try
       ROM := TGBROM.Create;
-      var Stream := TFileStream.Create(FFileName, fmOpenRead or fmShareDenyWrite);
+      var Stream := TBytesStream.Create(FROMData);
       try
         ROM.ReadROM(Stream);
       finally
@@ -253,6 +260,8 @@ begin
             finally
               FLock.Acquire;
             end;
+            StartCycles := CPU.Cycles;
+            Stopwatch := TStopwatch.StartNew;
             Continue;
           end;
         finally

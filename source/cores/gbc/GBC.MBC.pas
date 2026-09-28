@@ -1,9 +1,9 @@
-﻿unit GBC.MBC;
+unit GBC.MBC;
 
 interface
 
 uses
-  GBC.ROM;
+  System.SysUtils, GBC.ROM;
 
 {$SCOPEDENUMS ON}
 
@@ -35,6 +35,13 @@ implementation
 
 constructor TGBCMBC.Create(AROM: TGBCROM);
 begin
+  inherited Create;
+  if AROM = nil then
+    raise EArgumentNilException.Create('ROM must not be nil');
+  if not (AROM.GetCartridgeType.ID in
+    [$00, $01, $02, $03, $05, $06, $08, $09, $0F, $10, $11, $12, $13,
+     $19, $1A, $1B, $1C, $1D, $1E]) then
+    raise ENotSupportedException.Create('Unsupported cartridge: ' + AROM.GetCartridgeType.Name);
   FROM := AROM;
   FROMBankCount := Length(FROM.ROMData) div $4000;
   if FROMBankCount = 0 then
@@ -60,8 +67,6 @@ begin
   if FROM.GetCartridgeType.MapperType = 'MBC3' then
   begin
     ROMBankSelected := (FBankLow and $7F) mod FROMBankCount;
-    if (ROMBankSelected = 0) and (FROMBankCount > 1) then
-      ROMBankSelected := 1;
     RAMBankSelected := FBankHigh and $0F;
   end
   else if FROM.GetCartridgeType.MapperType = 'MBC5' then
@@ -69,6 +74,8 @@ begin
     // MBC5 uses a nine-bit ROM bank number and does not remap bank zero.
     ROMBankSelected := FBankLow mod FROMBankCount;
     RAMBankSelected := FBankHigh and $0F;
+    if FROM.GetCartridgeType.HasRumble then
+      RAMBankSelected := RAMBankSelected and 7;
   end
   else
   begin

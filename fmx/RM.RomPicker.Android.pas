@@ -1,4 +1,4 @@
-﻿unit RM.RomPicker.Android;
+unit RM.RomPicker.Android;
 
 interface
 
@@ -132,6 +132,10 @@ begin
       end;
       if Cancelled then
         Exit;
+      var Extension := TPath.GetExtension(FDisplayName).ToLower;
+      if (Extension <> '.nes') and (Extension <> '.gb') and (Extension <> '.gbc') then
+        raise Exception.Create('Choose a .nes, .gb or .gbc ROM');
+      FFileName := ChangeFileExt(FFileName, Extension);
       var Input := Resolver.openInputStream(Uri);
       if Input = nil then
         raise Exception.Create('Cannot open the selected document');

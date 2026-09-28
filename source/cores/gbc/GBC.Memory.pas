@@ -1,4 +1,4 @@
-﻿unit GBC.Memory;
+unit GBC.Memory;
 
 interface
 
@@ -74,6 +74,7 @@ type
     function GetROMBank: Integer;
     function IsCGBMode: Boolean;
     function PerformSpeedSwitch: Boolean;
+    property DoubleSpeed: Boolean read FDoubleSpeed;
     function ConsumeDMACyclePenalty: Integer;
     procedure InitializeMemory;
     constructor Create(AMbc: TGBCMBC; AGPU: TGBCGPU); overload;
@@ -165,7 +166,7 @@ end;
 
 function TGBCMemory.PerformSpeedSwitch: Boolean;
 begin
-  Result := FPrepareSpeedSwitch;
+  Result := IsCGBMode and FPrepareSpeedSwitch;
   if Result then
   begin
     FDoubleSpeed := not FDoubleSpeed;
@@ -321,7 +322,12 @@ begin
   else if Address = $FF4F then
     Result := FGPU.GetVBK
   else if Address = $FF4D then
-    Result := $7E or (Ord(FDoubleSpeed) shl 7) or Ord(FPrepareSpeedSwitch)
+  begin
+    if IsCGBMode then
+      Result := $7E or (Ord(FDoubleSpeed) shl 7) or Ord(FPrepareSpeedSwitch)
+    else
+      Result := $FF;
+  end
   else if (Address >= $FF68) and (Address <= $FF6B) then
     Result := FGPU.ReadCGBPalette(Address)
   else if Address = $FF70 then
@@ -425,7 +431,7 @@ begin
       $FF4B:
         FGPU.WindowX := Value;
       $FF4D:
-        FPrepareSpeedSwitch := (Value and 1) <> 0;
+        FPrepareSpeedSwitch := IsCGBMode and ((Value and 1) <> 0);
       $FF4F:
         FGPU.SetVBK(Value);
       $FF68, $FF69, $FF6A, $FF6B:

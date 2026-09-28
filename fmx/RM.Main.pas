@@ -1,4 +1,4 @@
-﻿unit RM.Main;
+unit RM.Main;
 
 interface
 
@@ -38,6 +38,7 @@ type
     FRomDisplayName: string;
     FOpeningRom: Boolean;
     FEmulationFaulted: Boolean;
+    FUserPaused: Boolean;
     FKeysDown: array[0..255] of Boolean;
     {$IFDEF ANDROID}
     FPicker: TNesAndroidRomPicker;
@@ -49,8 +50,10 @@ type
     {$ENDIF}
     procedure GamepadChanged(Sender: TObject);
     procedure SuborKeyboardChanged(Sender: TObject);
+    {$IFNDEF ANDROID}
     function InputControlHeight(const CanvasHeight: Single): Single;
     procedure ResizeClientArea;
+    {$ENDIF}
     procedure SetStatus(const Text: string);
     procedure SyncActivity;
     procedure OpenRom;
@@ -161,7 +164,12 @@ end;
 
 procedure TFormMain.FormActivate(Sender: TObject);
 begin
-  if FGamepad <> nil then
+  {$IFDEF ANDROID}
+  if FSuborKeyboardTouchAttached then
+    FSuborKeyboard.AttachToForm(Self)
+  else
+  {$ENDIF}
+    if FGamepad <> nil then
     FGamepad.AttachToForm(Self);
   SyncActivity;
 end;
@@ -178,6 +186,7 @@ begin
       ClientHeight - Padding.Top - Padding.Bottom - LayoutHead.Height);
 end;
 
+{$IFNDEF ANDROID}
 function TFormMain.InputControlHeight(const CanvasHeight: Single): Single;
 begin
   var AvailableWidth := ClientWidth - Padding.Left - Padding.Right;
@@ -189,17 +198,22 @@ end;
 
 procedure TFormMain.ResizeClientArea;
 begin
-  {$IFNDEF ANDROID}
   var Scale := 2;
   if FEmulation <> nil then
     Scale := FEmulation.Config.Scale;
-  ClientWidth := NES_WIDTH * Scale;
-  var CanvasHeight := NES_HEIGHT * Scale;
+  var ScreenWidth := NES_WIDTH;
+  var ScreenHeight := NES_HEIGHT;
+  if (FEmulation <> nil) and not ImageCanvas.Bitmap.IsEmpty then
+  begin
+    ScreenWidth := ImageCanvas.Bitmap.Width;
+    ScreenHeight := ImageCanvas.Bitmap.Height;
+  end;
+  ClientWidth := ScreenWidth * Scale;
+  var CanvasHeight := ScreenHeight * Scale;
   ClientHeight := Trunc(Padding.Top + LayoutHead.Height + CanvasHeight +
     InputControlHeight(CanvasHeight) + Padding.Bottom);
-  {$ELSE}
-  {$ENDIF}
 end;
+{$ENDIF}
 
 procedure TFormMain.GamepadChanged(Sender: TObject);
 begin
@@ -266,7 +280,7 @@ begin
       FGamepad.AttachToForm(Self);
     FSuborKeyboardTouchAttached := SuborKeyboardActive;
   end;
-  var Paused := FInBackground or FOpeningRom;
+  var Paused := FInBackground or FOpeningRom or FUserPaused;
   if FGamepad <> nil then
     FGamepad.Enabled := FGamepad.Enabled and not FInBackground;
   if FSuborKeyboard <> nil then
@@ -390,6 +404,7 @@ begin
       TimerUpdate.Enabled := False;
       try
         FEmulation.Reset;
+        FUserPaused := False;
         FEmulationFaulted := False;
         {$IFDEF ANDROID}
         if FActivityPaused then
@@ -402,7 +417,7 @@ begin
         raise;
       end;
     end
-    else if Code = Ord('P') then
+    else if (Code = Ord('P')) and not SuborKeyboardActive then
       SwitchPause
     else if (Code in [vkF5, vkF6]) and (FEmulation <> nil) and not SuborKeyboardActive then
     begin
@@ -426,19 +441,24 @@ end;
 
 procedure TFormMain.SwitchPause;
 begin
-  if FEmulation = nil then
+  if (FEmulation = nil) or FEmulationFaulted then
     Exit;
 
-  if not FEmulation.IsPaused then
+  FUserPaused := not FUserPaused;
+  if FUserPaused then
   begin
     FormDeactivate(Self);
     FEmulation.Pause;
   end
-  else if not FEmulationFaulted then
+  else
   begin
-    FormActivate(nil);
+    {$IFNDEF ANDROID}
     FEmulation.Resume;
+    {$ENDIF}
   end;
+  SyncActivity;
+  // SyncActivity can release input again when Android changes pause state.
+  FKeysDown[Ord('P')] := True;
 end;
 
 procedure TFormMain.FormKeyUp(Sender: TObject; var Key: Word; var KeyChar: WideChar; Shift: TShiftState);
@@ -451,9 +471,8 @@ begin
   var Code: Word := EventKey(Key, KeyChar);
   if Code <= High(FKeysDown) then
     FKeysDown[Code] := False;
-  if ((FEmulation <> nil) and FEmulation.UsesSuborKeyboard) or not (ssCtrl in Shift) then
-    if FEmulation <> nil then
-      FEmulation.SetKeyState(Code, False);
+  if FEmulation <> nil then
+    FEmulation.SetKeyState(Code, False);
   Key := 0;
   KeyChar := #0;
 end;
@@ -514,6 +533,7 @@ begin
   TimerUpdate.Enabled := False;
   FEmulation := nil; // Join before replacing the session.
   FEmulation := NewEmulation;
+  FUserPaused := False;
   ImageCanvas.DisableInterpolation := SameText(FEmulation.Config.Filter, 'nearest');
   {$IFNDEF ANDROID}
   ResizeClientArea;
@@ -577,14 +597,14 @@ procedure TFormMain.UpdateFrame;
 begin
   if FEmulation = nil then
     Exit;
+  var Frame: TEmulatorFrame;
+  var NewFrame := FEmulation.TryGetFrame(Frame);
   var ErrorText := FEmulation.TakeError;
   if (ErrorText <> '') and not FEmulationFaulted then
   begin
     StopOnError;
     raise Exception.Create(ErrorText);
   end;
-  var Frame: TEmulatorFrame;
-  var NewFrame := FEmulation.TryGetFrame(Frame);
   if not FEmulationFaulted and NewFrame then
   begin
     var NewCaption := Format('- %s - %.1f FPS', [FEmulation.Name, Frame.FramesPerSecond]);
@@ -595,7 +615,12 @@ begin
     Exit;
   if (ImageCanvas.Bitmap.Width <> Frame.Width) or
     (ImageCanvas.Bitmap.Height <> Frame.Height) then
+  begin
     ImageCanvas.Bitmap.SetSize(Frame.Width, Frame.Height);
+    {$IFNDEF ANDROID}
+    ResizeClientArea;
+    {$ENDIF}
+  end;
   var Data: TBitmapData;
   if ImageCanvas.Bitmap.Map(TMapAccess.Write, Data) then
   try

@@ -1,4 +1,4 @@
-﻿unit NES.Emulation;
+unit NES.Emulation;
 
 interface
 
@@ -27,6 +27,8 @@ type
     FConsole: TNesConsole;
     FAudio: TPCMAudio;
     FAudioFormat: TPCMAudioFormat;
+    FAudioEnabled: Boolean;
+    FAudioVolume: Single;
     FDiagnostics: TAudioDiagnostics;
     FInput: TNesInput;
     FLock: TCriticalSection;
@@ -54,7 +56,7 @@ type
     procedure TerminatedSet; override;
   public
     // Validates the ROM before replacing the current session. Call Start once.
-    constructor Create(const FileName: string; FourScoreEnabled: Boolean = False; RegionOverride: TRegionOverride = TRegionOverride.Auto; const SaveDirectory: string = '');
+    constructor Create(const FileName: string; FourScoreEnabled: Boolean = False; RegionOverride: TRegionOverride = TRegionOverride.Auto; const SaveDirectory: string = ''; AudioEnabled: Boolean = True; AudioVolume: Single = 1);
     destructor Destroy; override;
     procedure StopAndSave;
     procedure SetKey(Code: UInt32; Pressed: Boolean; const Keys, Keys2: TKeyMap); overload;
@@ -83,7 +85,7 @@ uses
   Androidapi.Helpers, Androidapi.JNIBridge, Androidapi.JNI.JavaTypes,
   Androidapi.JNI.Os,
   {$ENDIF}
-  System.Diagnostics, System.Math, System.IOUtils, NES.Consts, NES.SavePaths;
+  System.Diagnostics, System.Math, System.IOUtils, NES.Consts, NES.SavePaths, PCM.Audio.Null;
 
 {$IFDEF ANDROID}
 
@@ -214,10 +216,12 @@ begin
 end;
 {$ENDIF}
 
-constructor TNesEmulationThread.Create(const FileName: string; FourScoreEnabled: Boolean; RegionOverride: TRegionOverride; const SaveDirectory: string);
+constructor TNesEmulationThread.Create(const FileName: string; FourScoreEnabled: Boolean; RegionOverride: TRegionOverride; const SaveDirectory: string; AudioEnabled: Boolean; AudioVolume: Single);
 begin
   inherited Create(True);
   FreeOnTerminate := False;
+  FAudioEnabled := AudioEnabled;
+  FAudioVolume := EnsureRange(AudioVolume, 0.0, 1.0);
   FLock := TCriticalSection.Create;
   FSnapshotLock := TCriticalSection.Create;
   FSnapshotDone := TEvent.Create(nil, True, False, '');
@@ -522,7 +526,10 @@ begin
     FConsole.LoadBattery(FSaveDirectory);
     try
       // Native backends may require initialization and teardown on the same thread.
-      FAudio := TPCMAudio.Create(FAudioFormat);
+      if FAudioEnabled then
+        FAudio := TPCMAudio.Create(FAudioFormat)
+      else
+        FAudio := TPCMAudio.Create(FAudioFormat, TPCMAudioBackendNull.Create(FAudioFormat));
       try
         FLock.Enter;
         try
@@ -660,6 +667,8 @@ begin
           Count := FConsole.Apu.PopSamples(Samples);
           if Count > 0 then
           begin
+            for var I := 0 to Count - 1 do
+              Samples[I] := Round(Samples[I] * FAudioVolume);
             FAudio.Submit(Samples, Count);
             FLock.Enter;
             try

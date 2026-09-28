@@ -1,10 +1,10 @@
-﻿unit SCRP.GameList;
+unit SCRP.GameList;
 
 interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections, Xml.XMLIntf,
-  Xml.XMLDoc, Xml.Internal.OmniXML;
+  Xml.XMLDoc, Xml.xmldom, Xml.OmniXMLDom;
 
 type
   TGameProvider = class
@@ -109,7 +109,7 @@ implementation
 
 function XMLChild(const AParent: IXMLNode; const AName: string): IXMLNode;
 begin
-  Result := AParent.ChildNodes[AName];
+  Result := AParent.ChildNodes.FindNode(AName);
 end;
 
 function XMLReadString(const AParent: IXMLNode; const AName: string): string;
@@ -126,7 +126,10 @@ end;
 
 function XMLReadAttribute(const ANode: IXMLNode; const AName: string): string;
 begin
-  Result := ANode.GetAttribute(AName);
+  if ANode.HasAttribute(AName) then
+    Result := ANode.GetAttribute(AName)
+  else
+    Result := '';
 end;
 
 function XMLReadBool(const AParent: IXMLNode; const AName: string; const ADefault: Boolean = False): Boolean;
@@ -152,9 +155,8 @@ end;
 
 function XMLAddElement(const AParent: IXMLNode; const AName: string; const AValue: string): IXMLNode;
 begin
-  Result := AParent.OwnerDocument.CreateElement(AName, '');
+  Result := AParent.AddChild(AName);
   Result.Text := AValue;
-  //AParent.AppendChild(Result);
 end;
 
 function XMLAddAttribute(const ANode: IXMLNode; const AName: string; const AValue: string): IXMLNode;
@@ -198,8 +200,7 @@ end;
 
 function TGameProvider.SaveToXML(const AParent: IXMLNode): IXMLNode;
 begin
-  Result := AParent.OwnerDocument.CreateElement('provider', '');
-  //AParent.AppendChild(Result);
+  Result := AParent.AddChild('provider');
 
   XMLAddElement(Result, 'System', FSystem);
   XMLAddElement(Result, 'software', FSoftware);
@@ -284,8 +285,7 @@ end;
 
 function TGame.SaveToXML(const AParent: IXMLNode): IXMLNode;
 begin
-  Result := AParent.OwnerDocument.CreateElement('game', '');
-  //AParent.AppendChild(Result);
+  Result := AParent.AddChild('game');
 
   { Attributes }
   if FID <> '' then
@@ -393,10 +393,15 @@ begin
     FProvider.LoadFromXML(Node);
 
   { games }
-  Node := ANode.ChildNodes['game'];
+  Node := ANode.ChildNodes.First;
 
   while Assigned(Node) do
   begin
+    if (Node.NodeType <> ntElement) or (Node.NodeName <> 'game') then
+    begin
+      Node := Node.NextSibling;
+      Continue;
+    end;
     Game := TGame.Create;
 
     try
@@ -409,12 +414,6 @@ begin
 
     Node := Node.NextSibling;
 
-    while Assigned(Node) and (Node.NodeType <> ntElement) do
-      Node := Node.NextSibling;
-
-    if Assigned(Node) and
-      (Node.NodeName <> 'game') then
-      Break;
   end;
 end;
 
@@ -426,8 +425,9 @@ begin
   if not Assigned(ADocument) then
     raise EArgumentNilException.Create('ADocument');
 
-  Root := ADocument.CreateElement('gameList', '');
-  //ADocument.AppendChild(Root);
+  ADocument.Active := True;
+  ADocument.ChildNodes.Clear;
+  Root := ADocument.AddChild('gameList');
 
   FProvider.SaveToXML(Root);
 
@@ -442,7 +442,9 @@ var
   XML: IXMLDocument;
   Root: IXMLNode;
 begin
-  XML := TXMLDocument.Create(nil);
+  var Document := TXMLDocument.Create(nil);
+  XML := Document;
+  Document.DOMVendor := GetDOMVendor(sOmniXmlVendor);
   XML.LoadFromFile(AFileName);
   if not XML.Active then
     raise Exception.CreateFmt('Unable to load XML file: %s', [AFileName]);
@@ -462,7 +464,10 @@ procedure TGameList.SaveToFile(const AFileName: string);
 var
   XML: IXMLDocument;
 begin
-  XML := TXMLDocument.Create(nil);
+  var Document := TXMLDocument.Create(nil);
+  XML := Document;
+  Document.DOMVendor := GetDOMVendor(sOmniXmlVendor);
+  XML.Active := True;
   XML.Encoding := 'UTF-8';
   //XML.Standalone := True;
 

@@ -1,4 +1,4 @@
-﻿unit GBC.CPU;
+unit GBC.CPU;
 
 interface
 
@@ -14,7 +14,7 @@ type
     FGPU: TGBCGPU;
     FSound: TGBSound;
     FStopped: Boolean;
-    FInstructionCount: Integer;
+    FInstructionCount: UInt64;
     FCycles: UInt64;
     FRegisterA: Byte;
     FRegisterF: Byte;
@@ -131,8 +131,9 @@ type
     procedure Main;
     procedure Stop;
     property Stopped: Boolean read GetStopped;
+    // Base-speed clocks for video, sound and host pacing, including double speed.
     property Cycles: UInt64 read FCycles;
-    property InstructionCount: Integer read FInstructionCount;
+    property InstructionCount: UInt64 read FInstructionCount;
     property LastOpCode: Integer read FLastOpCode;
 
   end;
@@ -170,7 +171,7 @@ begin
     $CE:
       begin
         Second := FMemory.ReadByte(ProgramCounter);
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
       end;
   else
     Exit;
@@ -214,7 +215,7 @@ begin
     $E8:
       begin
         Value := FMemory.ReadByte(ProgramCounter);
-        ProgramCounter := ProgramCounter + 1;
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         if Value > 127 then
           Value := -((not Value + 1) and 255);
       end;
@@ -276,7 +277,7 @@ begin
     $C6:
       begin
         Second := FMemory.ReadByte(ProgramCounter);
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
       end;
   else
     Exit;
@@ -325,7 +326,7 @@ begin
     $E6:
       begin
         Second := FMemory.ReadByte(ProgramCounter);
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
       end;
   else
     Exit;
@@ -373,9 +374,9 @@ begin
   end;
 
   var Address: Integer := FMemory.ReadByte(ProgramCounter);
-  Inc(ProgramCounter);
+  ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
   var Temp: Integer := FMemory.ReadByte(ProgramCounter);
-  Inc(ProgramCounter);
+  ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
   if Condition then
   begin
     PushWord(ProgramCounter);
@@ -461,14 +462,19 @@ end;
 procedure TGBCCPU.ConsumeClockCycles(Cycles: Integer);
 begin
   repeat
-    Inc(FCycles, Cycles);
+    var BaseCycles := Cycles;
+    if FMemory.DoubleSpeed then
+      BaseCycles := BaseCycles div 2;
+    Inc(FCycles, BaseCycles);
     TGBCTimer.Instance.Step(Cycles);
-    FGPU.Step(Cycles);
+    FGPU.Step(BaseCycles);
     if FSound <> nil then
-      FSound.UpdateSound(Cycles);
+      FSound.UpdateSound(BaseCycles);
     // General DMA queues its stall while the CPU instruction writes FF55;
     // HBlank DMA queues it from the GPU mode transition above.
     Cycles := FMemory.ConsumeDMACyclePenalty;
+    if FMemory.DoubleSpeed then
+      Cycles := Cycles * 2;
   until Cycles = 0;
 end;
 
@@ -495,7 +501,7 @@ begin
     $fe:
       begin
         Second := FMemory.ReadByte(ProgramCounter);
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
       end;
   else
     Exit;
@@ -576,7 +582,7 @@ begin
       end;
     $10: // STOP 0 / CGB speed switch
       begin
-        Inc(ProgramCounter); // skip second byte 00
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF; // skip second byte 00
         // KEY1 prepares a CGB speed switch.  The STOP instruction completes
         // it and execution resumes at the following instruction.
         if not FMemory.PerformSpeedSwitch then
@@ -696,15 +702,14 @@ begin
     $18: // JR r8
       begin
         var Value: Integer := FMemory.ReadByte(ProgramCounter);
-        ProgramCounter := ProgramCounter + 1;
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         var Tmp: Integer := ProgramCounter;
-        ProgramCounter := ProgramCounter + 1;
         if (Value > 127) then
         begin
           Value := -((not Value + 1) and 255);
         end;
         Tmp := Tmp + Value;
-        ProgramCounter := Tmp;
+        ProgramCounter := Tmp and $FFFF;
         ConsumeClockCycles(12);
       end;
     $e9: // JP (HL)
@@ -745,9 +750,9 @@ begin
     $CD: // CALL a16
       begin
         var Value: Integer := FMemory.ReadByte(ProgramCounter);
-        ProgramCounter := ProgramCounter + 1;
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         var Tmp: Integer := FMemory.ReadByte(ProgramCounter);
-        ProgramCounter := ProgramCounter + 1;
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         Tmp := Tmp shl 8;
         Value := Value or Tmp;
         PushWord(ProgramCounter);
@@ -948,12 +953,12 @@ begin
   if FSuppressPCIncrement then
     FSuppressPCIncrement := False
   else
-    Inc(ProgramCounter);
+    ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
   if Result = $cb then
   begin
     Result := Result shl 8;
     Result := Result or FMemory.ReadByte(ProgramCounter);
-    Inc(ProgramCounter);
+    ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
   end;
 end;
 
@@ -1088,9 +1093,9 @@ end;
 procedure TGBCCPU.ExecuteJmp(OpCode: Byte);
 begin
   var Address: Integer := FMemory.ReadByte(ProgramCounter);
-  Inc(ProgramCounter);
+  ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
   var Temp: Integer := FMemory.ReadByte(ProgramCounter);
-  Inc(ProgramCounter);
+  ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
   Temp := Temp shl 8;
   Address := Address or Temp;
   ProgramCounter := Address;
@@ -1111,9 +1116,9 @@ begin
       Condition := GetCarryFlag;
   end;
   var Address: Integer := FMemory.ReadByte(ProgramCounter);
-  Inc(ProgramCounter);
+  ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
   var Temp: Integer := FMemory.ReadByte(ProgramCounter);
-  Inc(ProgramCounter);
+  ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
   if Condition then
   begin
     Temp := Temp shl 8;
@@ -1139,7 +1144,7 @@ begin
       Condition := GetCarryFlag;
   end;
   var N: Integer := FMemory.ReadByte(ProgramCounter);
-  ProgramCounter := ProgramCounter + 1;
+  ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
   if not Condition then
   begin
     ConsumeClockCycles(8);
@@ -1147,7 +1152,7 @@ begin
   end;
   if N > 127 then
     N := -((not N + 1) and 255);
-  ProgramCounter := ProgramCounter + N;
+  ProgramCounter := (Integer(ProgramCounter) + N) and $FFFF;
   ConsumeClockCycles(12);
 end;
 
@@ -1157,37 +1162,37 @@ begin
     $06: //LD nn, n
       begin
         SetRegisterB(FMemory.ReadByte(ProgramCounter));
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         ConsumeClockCycles(8);
       end;
     $0E:
       begin
         SetRegisterC(FMemory.ReadByte(ProgramCounter));
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         ConsumeClockCycles(8);
       end;
     $16:
       begin
         SetRegisterD(FMemory.ReadByte(ProgramCounter));
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         ConsumeClockCycles(8);
       end;
     $1E:
       begin
         SetRegisterE(FMemory.ReadByte(ProgramCounter));
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         ConsumeClockCycles(8);
       end;
     $26:
       begin
         SetRegisterH(FMemory.ReadByte(ProgramCounter));
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         ConsumeClockCycles(8);
       end;
     $2E:
       begin
         SetRegisterL(FMemory.ReadByte(ProgramCounter));
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         ConsumeClockCycles(8);
       end;
     $78: //LD r1,r2
@@ -1473,7 +1478,7 @@ begin
     $36:
       begin
         FMemory.WriteByte(GetRegisterHL, FMemory.ReadByte(ProgramCounter));
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         ConsumeClockCycles(12);
       end;
     $0A: //LD A,n
@@ -1489,14 +1494,14 @@ begin
     $FA:
       begin
         SetRegisterA(FMemory.ReadByte(FMemory.ReadWord(ProgramCounter)));
-        Inc(ProgramCounter);
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         ConsumeClockCycles(16);
       end;
     $3E:
       begin
         SetRegisterA(FMemory.ReadByte(ProgramCounter));
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         ConsumeClockCycles(8);
       end;
     $47: //LD n,A
@@ -1547,8 +1552,8 @@ begin
     $EA:
       begin
         FMemory.WriteByte(FMemory.ReadWord(ProgramCounter), GetRegisterA);
-        Inc(ProgramCounter);
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         ConsumeClockCycles(16);
       end;
     $F2:
@@ -1588,44 +1593,44 @@ begin
     $E0:
       begin
         FMemory.WriteByte($FF00 + FMemory.ReadByte(ProgramCounter), GetRegisterA);
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         ConsumeClockCycles(12);
       end;
     $F0:
       begin
         SetRegisterA(FMemory.ReadByte($FF00 + FMemory.ReadByte(ProgramCounter)));
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         ConsumeClockCycles(12);
       end;
     $01: //LD BC,nn
       begin
         SetRegisterC(FMemory.ReadByte(ProgramCounter));
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         SetRegisterB(FMemory.ReadByte(ProgramCounter));
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         ConsumeClockCycles(12);
       end;
     $11:
       begin
         SetRegisterE(FMemory.ReadByte(ProgramCounter));
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         SetRegisterD(FMemory.ReadByte(ProgramCounter));
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         ConsumeClockCycles(12);
       end;
     $21:
       begin
         SetRegisterL(FMemory.ReadByte(ProgramCounter));
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         SetRegisterH(FMemory.ReadByte(ProgramCounter));
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         ConsumeClockCycles(12);
       end;
     $31:
       begin
         StackPointer := FMemory.ReadWord(ProgramCounter);
-        Inc(ProgramCounter);
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         ConsumeClockCycles(12);
       end;
     $F9:
@@ -1638,7 +1643,7 @@ begin
         var Temp: Integer := FMemory.ReadByte(ProgramCounter);
         if Temp > 127 then
           Temp := -((not Temp + 1) and 255);
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         var AResult: Integer := Temp + StackPointer;
         SetRegisterH((AResult shr 8) and 255);
         SetRegisterL(AResult and 255);
@@ -1651,9 +1656,9 @@ begin
     $08:
       begin
         var Low := FMemory.ReadByte(ProgramCounter);
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         var Up := FMemory.ReadByte(ProgramCounter);
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
         var Address := ((Up shl 8) + Low);
         FMemory.WriteByte(Address, GetStackPointerLow);
         FMemory.WriteByte(Address + 1, GetStackPointerHigh);
@@ -1714,7 +1719,7 @@ begin
     $F6:
       begin
         Second := FMemory.ReadByte(ProgramCounter);
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
       end;
   end;
   SetRegisterA(GetRegisterA or Second);
@@ -2154,7 +2159,7 @@ begin
     $DE:
       begin
         Second := FMemory.ReadByte(ProgramCounter);
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
       end;
   else
     Exit;
@@ -2547,7 +2552,7 @@ begin
     $D6:
       begin
         Second := FMemory.ReadByte(ProgramCounter);
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
       end;
   else
     Exit;
@@ -2660,7 +2665,7 @@ begin
     $EE:
       begin
         Second := FMemory.ReadByte(ProgramCounter);
-        Inc(ProgramCounter);
+        ProgramCounter := (Integer(ProgramCounter) + 1) and $FFFF;
       end;
   else
     Exit;

@@ -1,9 +1,9 @@
-﻿unit GB.MBC;
+unit GB.MBC;
 
 interface
 
 uses
-  GB.ROM;
+  System.SysUtils, GB.ROM;
 
 {$SCOPEDENUMS ON}
 
@@ -34,6 +34,13 @@ implementation
 
 constructor TGBMBC.Create(AROM: TGBROM);
 begin
+  inherited Create;
+  if AROM = nil then
+    raise EArgumentNilException.Create('ROM must not be nil');
+  if not (AROM.GetCartridgeType.ID in
+    [$00, $01, $02, $03, $05, $06, $08, $09, $0F, $10, $11, $12, $13,
+     $19, $1A, $1B, $1C, $1D, $1E]) then
+    raise ENotSupportedException.Create('Unsupported cartridge: ' + AROM.GetCartridgeType.Name);
   FROM := AROM;
   FROMBankCount := Length(FROM.ROMData) div $4000;
   if FROMBankCount = 0 then
@@ -47,10 +54,8 @@ begin
     SetLength(FRAM, $200) // 512 four-bit internal RAM cells
   else
   if FHasRAM and Assigned(FROM.Cartridge) then
-    case FROM.Cartridge.RAMSizeBytes of
-      $800, $2000, $8000:
-        SetLength(FRAM, FROM.Cartridge.RAMSizeBytes);
-    end;
+    if FROM.Cartridge.RAMSizeBytes > 0 then
+      SetLength(FRAM, FROM.Cartridge.RAMSizeBytes);
   FHasRAM := Length(FRAM) > 0;
   UpdateBanks;
 end;
@@ -60,8 +65,6 @@ begin
   if FROM.GetCartridgeType.MapperType = 'MBC3' then
   begin
     ROMBankSelected := (FBankLow and $7F) mod FROMBankCount;
-    if (ROMBankSelected = 0) and (FROMBankCount > 1) then
-      ROMBankSelected := 1;
     RAMBankSelected := FBankHigh and $0F;
   end
   else if FROM.GetCartridgeType.MapperType = 'MBC5' then
@@ -69,6 +72,8 @@ begin
     // MBC5 uses a nine-bit ROM bank number and does not remap bank zero.
     ROMBankSelected := FBankLow mod FROMBankCount;
     RAMBankSelected := FBankHigh and $0F;
+    if FROM.GetCartridgeType.HasRumble then
+      RAMBankSelected := RAMBankSelected and 7;
   end
   else
   begin
@@ -86,9 +91,11 @@ begin
   if (Address < 0) or (Address > $BFFF) then
     Exit;
   case FROM.GetCartridgeType.ID of
-    $00:
+    $00, $08, $09:
       if (Address < $8000) and (Address < Length(FROM.ROMData)) then
-        Result := FROM.ROMData[Address];
+        Result := FROM.ROMData[Address]
+      else if (Address >= $A000) and FHasRAM then
+        Result := FRAM[(Address - $A000) mod Length(FRAM)];
     $01, $02, $03:
       if Address < $8000 then
       begin
@@ -157,7 +164,12 @@ procedure TGBMBC.MbcWrite(Address, Value: Integer);
 begin
   if (Address < 0) or (Address > $BFFF) then
     Exit;
-  if FROM.GetCartridgeType.MapperType = 'MBC1' then
+  if FROM.GetCartridgeType.ID in [$08, $09] then
+  begin
+    if (Address >= $A000) and FHasRAM then
+      FRAM[(Address - $A000) mod Length(FRAM)] := Value and $FF;
+  end
+  else if FROM.GetCartridgeType.MapperType = 'MBC1' then
   begin
     if Address <= $1FFF then
       FRAMEnabled := (Value and $0F) = $0A

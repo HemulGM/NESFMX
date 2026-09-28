@@ -1,4 +1,4 @@
-﻿unit Core.Emulation;
+unit Core.Emulation;
 
 interface
 
@@ -100,8 +100,18 @@ type
   end;
 
 function EmulatorConfigFileName(const EmulatorId: string): string;
+function ReadEmulatorKey(Ini: TIniFile; const Section, Name: string; DefaultValue: UInt32): UInt32;
 
 implementation
+
+function ReadEmulatorKey(Ini: TIniFile; const Section, Name: string; DefaultValue: UInt32): UInt32;
+begin
+  var Value := Ini.ReadInteger(Section, Name, Integer(DefaultValue and $FFFF));
+  if (Value < 0) or (Value > $FFFF) then
+    Result := DefaultValue
+  else
+    Result := Value;
+end;
 
 function EmulatorConfigFileName(const EmulatorId: string): string;
 begin
@@ -158,7 +168,7 @@ begin
     if FFilter = '' then
       FFilter := 'nearest';
     FAudioEnabled := Ini.ReadBool('Audio', 'Enabled', FAudioEnabled);
-    FAudioVolume := EnsureRange(Ini.ReadFloat('Audio', 'Volume', FAudioVolume), 0.0, 1.0);
+    SetAudioVolume(Ini.ReadFloat('Audio', 'Volume', FAudioVolume));
     LoadCoreSettings(Ini);
   finally
     Ini.Free;
@@ -197,7 +207,10 @@ end;
 
 procedure TEmulatorConfigBase.SetAudioVolume(const Value: Single);
 begin
-  FAudioVolume := EnsureRange(Value, 0.0, 1.0);
+  if IsNan(Value) or IsInfinite(Value) then
+    FAudioVolume := 0.5
+  else
+    FAudioVolume := EnsureRange(Value, 0.0, 1.0);
 end;
 
 procedure TEmulatorConfigBase.SetFilter(const Value: string);

@@ -1,4 +1,4 @@
-﻿unit Core.Adapter.NES;
+unit Core.Adapter.NES;
 
 interface
 
@@ -101,7 +101,8 @@ begin
   inherited Create;
   FConfig := TNesEmulatorConfig.Create(EmulatorConfigFileName('nes'));
   FConfig.Load;
-  FThread := TNesEmulationThread.Create(FileName, FConfig.FourScore, FConfig.Region);
+  FThread := TNesEmulationThread.Create(FileName, FConfig.FourScore, FConfig.Region,
+    '', FConfig.AudioEnabled, FConfig.AudioVolume);
 end;
 
 destructor TNesCoreAdapter.Destroy;
@@ -164,6 +165,7 @@ end;
 procedure TNesCoreAdapter.LoadSnapshot(const Name: string);
 begin
   FThread.LoadSnapshot(Name);
+  FError := '';
 end;
 
 procedure TNesCoreAdapter.Pause;
@@ -174,6 +176,7 @@ end;
 procedure TNesCoreAdapter.Reset;
 begin
   FThread.RequestReset;
+  FError := '';
 end;
 
 procedure TNesCoreAdapter.Resume;
@@ -289,7 +292,7 @@ end;
 
 function ReadKey(Ini: TIniFile; const Section, Name: string; DefaultValue: UInt32): UInt32;
 begin
-  Result := Ini.ReadInteger(Section, Name, DefaultValue);
+  Result := ReadEmulatorKey(Ini, Section, Name, DefaultValue);
 end;
 
 procedure TNesEmulatorConfig.LoadKeyMap(Ini: TIniFile; const Section: string; var Keys: TKeyMap);
