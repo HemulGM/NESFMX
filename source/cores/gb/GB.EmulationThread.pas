@@ -45,6 +45,7 @@ type
     function TryGetFrame(out Screen: TScreenArray; out FramesPerSecond: Double): Boolean;
     function TakeError: string;
     property SoundVolume: Single read FSoundVolume write SetSoundVolume;
+    property PauseRequested: Boolean read FPauseRequested;
   end;
 
 implementation

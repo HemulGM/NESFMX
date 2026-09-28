@@ -88,6 +88,7 @@ type
     function TryGetFrame(out Frame: TEmulatorFrame): Boolean;
     function TakeError: string;
     function GetConfig: IEmulatorConfig;
+    function IsPaused: Boolean;
   end;
 
 implementation
@@ -153,6 +154,11 @@ end;
 function TNesCoreAdapter.GetUsesSuborKeyboard: Boolean;
 begin
   Result := FThread.UsesSuborKeyboard;
+end;
+
+function TNesCoreAdapter.IsPaused: Boolean;
+begin
+  Result := FThread.IsPausd;
 end;
 
 procedure TNesCoreAdapter.LoadSnapshot(const Name: string);

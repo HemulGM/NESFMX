@@ -501,6 +501,7 @@
         <DCCReference Include="..\source\cores\gbc\GBC.Sound.Channel.pas"/>
         <DCCReference Include="..\source\cores\gbc\GBC.Sound.pas"/>
         <DCCReference Include="..\source\cores\gbc\GBC.Timer.pas"/>
+        <DCCReference Include="..\source\gamelist\SCRP.GameList.pas"/>
         <RcItem Include="RetroMul.Artwork\Windows\Uwp_150.png">
             <ResourceType>RCDATA</ResourceType>
             <ResourceId>MainIcon</ResourceId>

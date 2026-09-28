@@ -56,6 +56,7 @@ type
     procedure OpenRom;
     procedure StopOnError;
     procedure UpdateFrame;
+    procedure SwitchPause;
   public
     procedure SaveSnapshot(const Name: string);
     procedure LoadSnapshot(const Name: string);
@@ -74,7 +75,7 @@ var
 implementation
 
 uses
-  System.IOUtils, Core.Adapter.NES;
+  System.IOUtils, Core.Adapter.NES, SCRP.GameList;
 
 {$R *.fmx}
 
@@ -99,7 +100,11 @@ end;
 
 constructor TFormMain.Create(AOwner: TComponent);
 begin
-  inherited;
+  inherited;     {
+  var test := TGameList.Create;
+  test.LoadFromFile('H:\ROMS\gb\gamelist.xml');
+  test.SaveToFile('H:\ROMS\gb\gamelist_test.xml');
+  test.Free;              }
   SetStatus(' - Open ROM');
   {$IFDEF ANDROID}
   // Hardware volume keys control game audio, including before a ROM is loaded.
@@ -174,10 +179,8 @@ begin
 end;
 
 function TFormMain.InputControlHeight(const CanvasHeight: Single): Single;
-var
-  AvailableWidth: Single;
 begin
-  AvailableWidth := ClientWidth - Padding.Left - Padding.Right;
+  var AvailableWidth := ClientWidth - Padding.Left - Padding.Right;
   if (FEmulation <> nil) and FEmulation.UsesSuborKeyboard then
     Result := TNesSuborKeyboard.PreferredHeight(AvailableWidth, CanvasHeight)
   else
@@ -249,8 +252,8 @@ begin
     FSuborKeyboard.Enabled := SuborKeyboardActive and not FEmulationFaulted and not FOpeningRom;
   end;
   {$IFDEF ANDROID}
-  // The Android view accepts one native touch listener.  The controls are
-  // mutually exclusive, so hand it to the currently visible control.
+  // The Android view accepts one native touch listener.
+  // The controls are mutually exclusive, so hand it to the currently visible control.
   if FSuborKeyboardTouchAttached <> SuborKeyboardActive then
   begin
     if FSuborKeyboardTouchAttached then
@@ -280,8 +283,7 @@ begin
       else if not FEmulationFaulted then
         FEmulation.Resume;
   end;
-  TimerUpdate.Enabled := not FInBackground and
-    (FOpeningRom or ((FEmulation <> nil) and not FEmulationFaulted));
+  TimerUpdate.Enabled := not FInBackground and (FOpeningRom or ((FEmulation <> nil) and not FEmulationFaulted));
   {$ELSE}
   TimerUpdate.Enabled := (FEmulation <> nil) and not FEmulationFaulted;
   {$ENDIF}
@@ -400,6 +402,8 @@ begin
         raise;
       end;
     end
+    else if Code = Ord('P') then
+      SwitchPause
     else if (Code in [vkF5, vkF6]) and (FEmulation <> nil) and not SuborKeyboardActive then
     begin
       try
@@ -418,6 +422,23 @@ begin
       FEmulation.SetKeyState(Code, True);
   Key := 0;
   KeyChar := #0;
+end;
+
+procedure TFormMain.SwitchPause;
+begin
+  if FEmulation = nil then
+    Exit;
+
+  if not FEmulation.IsPaused then
+  begin
+    FormDeactivate(Self);
+    FEmulation.Pause;
+  end
+  else if not FEmulationFaulted then
+  begin
+    FormActivate(nil);
+    FEmulation.Resume;
+  end;
 end;
 
 procedure TFormMain.FormKeyUp(Sender: TObject; var Key: Word; var KeyChar: WideChar; Shift: TShiftState);

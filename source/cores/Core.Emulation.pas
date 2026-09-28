@@ -96,6 +96,7 @@ type
     property SupportsSnapshots: Boolean read GetSupportsSnapshots;
     property UsesSuborKeyboard: Boolean read GetUsesSuborKeyboard;
     property Config: IEmulatorConfig read GetConfig;
+    function IsPaused: Boolean;
   end;
 
 function EmulatorConfigFileName(const EmulatorId: string): string;

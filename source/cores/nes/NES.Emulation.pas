@@ -45,6 +45,7 @@ type
     FUsesSuborKeyboard: Boolean;
     FStatus: TEmulationStatus;
     FRunFrameMs: Double;
+    FPaused: Boolean;
     procedure RunEmulation;
     procedure SnapshotCommand(const Name: string; Loading: Boolean);
     function ProcessSnapshot: Boolean;
@@ -72,6 +73,7 @@ type
     property SnapshotDirectory: string read FSnapshotDirectory;
     property RunFrameMs: Double read FRunFrameMs;
     property UsesSuborKeyboard: Boolean read FUsesSuborKeyboard;
+    property IsPausd: Boolean read FPaused;
   end;
 
 implementation
@@ -557,7 +559,7 @@ begin
   var NextFrame := TStopwatch.GetTimeStamp;
   var FpsStart := NextFrame;
   var Frames := 0;
-  var Paused := False;
+  FPaused := False;
   var Failed := False;
   var NextSave := TStopwatch.GetTimeStamp + TStopwatch.Frequency * 5;
   {$IFDEF ANDROID}
@@ -573,7 +575,7 @@ begin
           FpsStart := NextFrame;
           Frames := 0;
           if Failed then
-            Paused := False;
+            FPaused := False;
           Failed := False;
         end;
         var ResetRequested: Boolean;
@@ -613,12 +615,12 @@ begin
           NextFrame := TStopwatch.GetTimeStamp;
           FpsStart := NextFrame;
           Frames := 0;
-          Paused := False;
+          FPaused := False;
           Failed := False;
         end;
-        if ResumeRequested and Paused and not Failed then
+        if ResumeRequested and FPaused and not Failed then
         begin
-          Paused := False;
+          FPaused := False;
           NextFrame := TStopwatch.GetTimeStamp;
           FpsStart := NextFrame;
           Frames := 0;
@@ -626,10 +628,10 @@ begin
         if PauseRequested then
         begin
           FAudio.Clear;
-          Paused := True;
+          FPaused := True;
           FConsole.SaveBattery;
         end;
-        if Paused then
+        if FPaused then
         begin
           {$IFDEF ANDROID}
           FrameHints.Pause;
@@ -702,7 +704,7 @@ begin
         on E: Exception do
         begin
           FAudio.Clear;
-          Paused := True;
+          FPaused := True;
           FLock.Enter;
           Failed := True;
           try

@@ -15,11 +15,15 @@ type
     function GetKeys: TGBKeyMap;
     procedure SetKeys(const Value: TGBKeyMap);
     property Keys: TGBKeyMap read GetKeys write SetKeys;
+    function GetScreenPalette: Integer;
+    procedure SetScreenPalette(const Value: Integer);
+    property ScreenPalette: Integer read GetScreenPalette write SetScreenPalette;
   end;
 
   TGBEmulatorConfig = class(TEmulatorConfigBase, IGBEmulatorConfig)
   private
     FKeys: TGBKeyMap;
+    FScreenPalette: Integer;
   protected
     procedure LoadCoreSettings(Ini: TIniFile); override;
     procedure SaveCoreSettings(Ini: TIniFile); override;
@@ -27,6 +31,9 @@ type
     constructor Create(const AFileName: string);
     function GetKeys: TGBKeyMap;
     procedure SetKeys(const Value: TGBKeyMap);
+
+    function GetScreenPalette: Integer;
+    procedure SetScreenPalette(const Value: Integer);
   end;
 
   TGBCoreAdapter = class(TInterfacedObject, IEmulationCore)
@@ -57,12 +64,13 @@ type
     function TryGetFrame(out Frame: TEmulatorFrame): Boolean;
     function TakeError: string;
     function GetConfig: IEmulatorConfig;
+    function IsPaused: Boolean;
   end;
 
 implementation
 
 uses
-  System.SysUtils, System.UITypes, GB.GPU, GB.Palettes;
+  System.SysUtils, System.Math, System.UITypes, GB.GPU, GB.Palettes;
 
 constructor TGBCoreAdapter.Create(const FileName: string);
 begin
@@ -115,6 +123,11 @@ end;
 function TGBCoreAdapter.GetUsesSuborKeyboard: Boolean;
 begin
   Result := False;
+end;
+
+function TGBCoreAdapter.IsPaused: Boolean;
+begin
+  Result := FThread.PauseRequested;
 end;
 
 procedure TGBCoreAdapter.LoadSnapshot(const Name: string);
@@ -214,7 +227,7 @@ begin
       Index := Screen[Y * Frame.Width + X];
       if (Index < 0) or (Index > 3) then
         Index := 0;
-      Frame.Pixels[Y * Frame.Width + X] := ScreenPalettes[0].Colors[Index];
+      Frame.Pixels[Y * Frame.Width + X] := ScreenPalettes[FConfig.ScreenPalette].Colors[Index];
     end;
   Inc(FFrameNumber);
   Frame.FrameNumber := FFrameNumber;
@@ -234,6 +247,7 @@ begin
   FKeys.Down := vkDown;
   FKeys.Left := vkLeft;
   FKeys.Right := vkRight;
+  FScreenPalette := 0;
 end;
 
 procedure TGBEmulatorConfig.LoadCoreSettings(Ini: TIniFile);
@@ -246,6 +260,7 @@ begin
   FKeys.Down := Ini.ReadInteger('Controls', 'Down', FKeys.Down);
   FKeys.Left := Ini.ReadInteger('Controls', 'Left', FKeys.Left);
   FKeys.Right := Ini.ReadInteger('Controls', 'Right', FKeys.Right);
+  FScreenPalette := EnsureRange(Ini.ReadInteger('Video', 'Palette', 0), 0, SCREEN_PALETTE_COUNT - 1);
 end;
 
 procedure TGBEmulatorConfig.SaveCoreSettings(Ini: TIniFile);
@@ -258,6 +273,7 @@ begin
   Ini.WriteInteger('Controls', 'Down', FKeys.Down);
   Ini.WriteInteger('Controls', 'Left', FKeys.Left);
   Ini.WriteInteger('Controls', 'Right', FKeys.Right);
+  Ini.WriteInteger('Video', 'Palette', FScreenPalette);
 end;
 
 function TGBEmulatorConfig.GetKeys: TGBKeyMap;
@@ -265,9 +281,19 @@ begin
   Result := FKeys;
 end;
 
+function TGBEmulatorConfig.GetScreenPalette: Integer;
+begin
+  Result := FScreenPalette;
+end;
+
 procedure TGBEmulatorConfig.SetKeys(const Value: TGBKeyMap);
 begin
   FKeys := Value;
+end;
+
+procedure TGBEmulatorConfig.SetScreenPalette(const Value: Integer);
+begin
+  FScreenPalette := EnsureRange(Value, 0, SCREEN_PALETTE_COUNT - 1);
 end;
 
 end.

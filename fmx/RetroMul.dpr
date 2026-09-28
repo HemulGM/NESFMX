@@ -93,7 +93,8 @@ uses
   GBC.ROM in '..\source\cores\gbc\GBC.ROM.pas',
   GBC.Sound.Channel in '..\source\cores\gbc\GBC.Sound.Channel.pas',
   GBC.Sound in '..\source\cores\gbc\GBC.Sound.pas',
-  GBC.Timer in '..\source\cores\gbc\GBC.Timer.pas';
+  GBC.Timer in '..\source\cores\gbc\GBC.Timer.pas',
+  SCRP.GameList in '..\source\gamelist\SCRP.GameList.pas';
 
 {$R *.res}
 

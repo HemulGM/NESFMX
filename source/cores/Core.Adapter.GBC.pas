@@ -57,6 +57,7 @@ type
     function TryGetFrame(out Frame: TEmulatorFrame): Boolean;
     function TakeError: string;
     function GetConfig: IEmulatorConfig;
+    function IsPaused: Boolean;
   end;
 
 implementation
@@ -115,6 +116,11 @@ end;
 function TGBCCoreAdapter.GetUsesSuborKeyboard: Boolean;
 begin
   Result := False;
+end;
+
+function TGBCCoreAdapter.IsPaused: Boolean;
+begin
+  Result := FThread.PauseRequested;
 end;
 
 procedure TGBCCoreAdapter.LoadSnapshot(const Name: string);
