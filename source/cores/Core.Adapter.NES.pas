@@ -320,11 +320,9 @@ begin
 end;
 
 procedure TNesEmulatorConfig.LoadCoreSettings(Ini: TIniFile);
-var
-  Region: string;
 begin
   FFourScore := Ini.ReadBool('Input', 'FourScore', FFourScore);
-  Region := Ini.ReadString('Video', 'Region', 'Auto');
+  var Region := Ini.ReadString('Video', 'Region', 'Auto');
   if SameText(Region, 'PAL') then
     FRegion := TRegionOverride.PAL
   else if SameText(Region, 'NTSC') then

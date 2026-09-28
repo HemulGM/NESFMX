@@ -133,8 +133,9 @@ begin
       if Cancelled then
         Exit;
       var Extension := TPath.GetExtension(FDisplayName).ToLower;
-      if (Extension <> '.nes') and (Extension <> '.gb') and (Extension <> '.gbc') then
-        raise Exception.Create('Choose a .nes, .gb or .gbc ROM');
+      if (Extension <> '.nes') and (Extension <> '.gb') and (Extension <> '.gbc') and
+        (Extension <> '.md') and (Extension <> '.gen') and (Extension <> '.bin') and (Extension <> '.smd') then
+        raise Exception.Create('Choose a .nes, .gb, .gbc, .md, .gen, .bin or .smd ROM');
       FFileName := ChangeFileExt(FFileName, Extension);
       var Input := Resolver.openInputStream(Uri);
       if Input = nil then

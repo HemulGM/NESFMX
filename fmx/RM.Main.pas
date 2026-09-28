@@ -21,6 +21,7 @@ type
     LayoutHead: TLayout;
     ButtonOpen: TButton;
     LabelStatus: TLabel;
+    ImageLogo: TImage;
     procedure FormActivate(Sender: TObject);
     procedure FormResize(Sender: TObject);
     procedure FormDeactivate(Sender: TObject);
@@ -108,7 +109,7 @@ begin
   test.LoadFromFile('H:\ROMS\gb\gamelist.xml');
   test.SaveToFile('H:\ROMS\gb\gamelist_test.xml');
   test.Free;              }
-  SetStatus(' - Open ROM');
+  SetStatus('Open ROM');
   {$IFDEF ANDROID}
   // Hardware volume keys control game audio, including before a ROM is loaded.
   TAndroidHelper.Activity.setVolumeControlStream(TJAudioManager.JavaClass.STREAM_MUSIC);
@@ -239,17 +240,20 @@ begin
 end;
 
 procedure TFormMain.SuborKeyboardChanged(Sender: TObject);
-var
-  Peripheral: INesPeripheralCore;
 begin
+  var Peripheral: INesPeripheralCore;
   if Supports(FEmulation, INesPeripheralCore, Peripheral) then
     Peripheral.SetSuborKeys(FSuborKeyboard.Keys);
 end;
 
 procedure TFormMain.SetStatus(const Text: string);
 begin
-  Caption := AppName + Text;
+  Caption := AppName + ' - ' + Text;
+  {$IFDEF ANDROID}
   LabelStatus.Text := Caption;
+  {$ELSE}
+  LabelStatus.Visible := False;
+  {$ENDIF}
 end;
 
 procedure TFormMain.SyncActivity;
@@ -411,7 +415,7 @@ begin
           FEmulation.Pause;
         {$ENDIF}
         SyncActivity;
-        SetStatus(' - ' + FRomDisplayName);
+        SetStatus(FRomDisplayName);
       except
         StopOnError;
         raise;
@@ -510,7 +514,7 @@ begin
   if FEmulation <> nil then
     FEmulation.Pause;
   FormDeactivate(Self);
-  SetStatus(' - Stopped after error - ' + FRomDisplayName);
+  SetStatus('Stopped after error - ' + FRomDisplayName);
   SyncActivity;
 end;
 
@@ -552,7 +556,7 @@ begin
     {$ENDIF}
     FEmulation.Start;
     SyncActivity;
-    SetStatus(' - ' + FEmulation.Name + ' - ' + FRomDisplayName);
+    SetStatus(FEmulation.Name + ' - ' + FRomDisplayName);
   except
     StopOnError;
     raise;
@@ -565,6 +569,7 @@ begin
     Exit;
   FOpeningRom := True;
   ButtonOpen.Enabled := False;
+  ImageLogo.Visible := False;
   FormDeactivate(Self);
   {$IFDEF ANDROID}
   try
@@ -580,7 +585,7 @@ begin
   {$ELSE}
   var Dialog: TOpenDialog := TOpenDialog.Create(Self);
   try
-    Dialog.Filter := 'Console ROM (*.nes;*.gb;*.gbc)|*.nes;*.gb;*.gbc|NES ROM (*.nes)|*.nes|Game Boy ROM (*.gb;*.gbc)|*.gb;*.gbc';
+    Dialog.Filter := 'Console ROM|*.nes;*.gb;*.gbc;*.md;*.gen;*.bin;*.smd|NES ROM (*.nes)|*.nes|Game Boy ROM (*.gb;*.gbc)|*.gb;*.gbc|Mega Drive ROM (*.md;*.gen;*.bin;*.smd)|*.md;*.gen;*.bin;*.smd';
     Dialog.Options := [TOpenOption.ofFileMustExist, TOpenOption.ofPathMustExist];
     if Dialog.Execute then
       LoadRom(Dialog.FileName);
@@ -607,7 +612,7 @@ begin
   end;
   if not FEmulationFaulted and NewFrame then
   begin
-    var NewCaption := Format('- %s - %.1f FPS', [FEmulation.Name, Frame.FramesPerSecond]);
+    var NewCaption := Format('%s - %.1f FPS', [FEmulation.Name, Frame.FramesPerSecond]);
     if Caption <> NewCaption then
       SetStatus(NewCaption);
   end;

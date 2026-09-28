@@ -8,8 +8,6 @@
 __history/
 __recovery/
 
-/LiangliangNES.res
-/LiangliangNES.vrc
 /fmx/Win32/Debug/*
 *.dsv
 *.pyc
@@ -24,3 +22,10 @@ __recovery/
 /fmx/OSX64/*
 /fmx/OSXARM64/*
 *.exe
+/source/cores/md/COMPATIBILITY.md
+/source/cores/md/LICENSE.clowncommon.txt
+/source/cores/md/LICENSE.txt
+/source/cores/md/README.md
+/term/Win32/*
+/tools/*
+/MULTICORE_AUDIT.md
