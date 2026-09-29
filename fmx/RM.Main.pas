@@ -250,23 +250,50 @@ begin
         if not TDirectory.Exists(Folder) then
           Exit;
 
-        var GameListXML := TPath.Combine(Folder, 'gamelist.xml');
-        if not TFile.Exists(GameListXML) then
-          Exit;
-
         ButtonSetRoot.Visible := False;
-        var GameList := TGameList.Create;
-        try
-          GameList.LoadFromFile(GameListXML);
-          GameList.SaveToFile(GameListXML + '.xml');
-          for var Game in GameList.Games do
-          begin
-            var Item := TListBoxItemGame.Create(ListBoxGames);
-            ListBoxGames.AddObject(Item);
-            FillGameItem(Item, Game, Folder);
+
+        var GameListXML := TPath.Combine(Folder, 'gamelist.xml');
+        if TFile.Exists(GameListXML) then
+        begin
+          ListBoxGames.DefaultItemStyles.ItemStyle := 'listboxitemstyle_game';
+          ListBoxGames.ItemHeight := 70;
+          var GameList := TGameList.Create;
+          try
+            GameList.LoadFromFile(GameListXML);
+            GameList.SaveToFile(GameListXML + '.xml');
+            for var Game in GameList.Games do
+            begin
+              var Item := TListBoxItemGame.Create(ListBoxGames);
+              ListBoxGames.AddObject(Item);
+              FillGameItem(Item, Game, Folder);
+            end;
+          finally
+            GameList.Free;
           end;
-        finally
-          GameList.Free;
+        end
+        else
+        begin
+          ListBoxGames.DefaultItemStyles.ItemStyle := 'listboxitemstyle';
+          ListBoxGames.ItemHeight := 32;
+          for var GameFile in TDirectory.GetFiles(Folder) do
+          begin
+            var Ext := TPath.GetExtension(GameFile).ToLower;
+            if (Ext <> '.nes') and (Ext <> '.gb') and
+              (Ext <> '.gbc') and (Ext <> '.smd') and
+              (Ext <> '.bin') and (Ext <> '.md') and (Ext <> '.gen')
+              then
+              Continue;
+            var Game := TGame.Create;
+            try
+              Game.Path := GameFile;
+              Game.Name := TPath.GetFileNameWithoutExtension(GameFile);
+              var Item := TListBoxItemGame.Create(ListBoxGames);
+              ListBoxGames.AddObject(Item);
+              FillGameItem(Item, Game, Folder);
+            finally
+              Game.Free;
+            end;
+          end;
         end;
       finally
         ListBoxGames.EndUpdate;
