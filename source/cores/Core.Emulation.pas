@@ -100,9 +100,13 @@ type
   end;
 
 function EmulatorConfigFileName(const EmulatorId: string): string;
+
 function ReadEmulatorKey(Ini: TIniFile; const Section, Name: string; DefaultValue: UInt32): UInt32;
 
 implementation
+
+uses
+  Core.SavePaths;
 
 function ReadEmulatorKey(Ini: TIniFile; const Section, Name: string; DefaultValue: UInt32): UInt32;
 begin
@@ -115,11 +119,7 @@ end;
 
 function EmulatorConfigFileName(const EmulatorId: string): string;
 begin
-  {$IF Defined(ANDROID)}
-  Result := TPath.Combine(TPath.GetDocumentsPath, EmulatorId + '.ini');
-  {$ELSE}
-  Result := TPath.Combine(ExtractFilePath(ParamStr(0)), EmulatorId + '.ini');
-  {$ENDIF}
+  Result := TPath.Combine(GetDocumentsDirectory, EmulatorId + '.ini');
 end;
 
 { TEmulatorConfigBase }
@@ -161,29 +161,33 @@ end;
 
 procedure TEmulatorConfigBase.Load;
 begin
-  var Ini := TIniFile.Create(FFileName);
-  try
-    FScale := EnsureRange(Ini.ReadInteger('Video', 'Scale', FScale), 1, 8);
-    FFilter := Trim(Ini.ReadString('Video', 'Filter', FFilter));
-    if FFilter = '' then
-      FFilter := 'nearest';
-    FAudioEnabled := Ini.ReadBool('Audio', 'Enabled', FAudioEnabled);
-    SetAudioVolume(Ini.ReadFloat('Audio', 'Volume', FAudioVolume));
-    LoadCoreSettings(Ini);
-  finally
-    Ini.Free;
-  end;
-  if not FileExists(FFileName) then
+  if TFile.Exists(FFileName) then
+  begin
+    var Ini := TIniFile.Create(FFileName);
+    try
+      SetScale(Ini.ReadInteger('Video', 'Scale', FScale));
+      FFilter := Ini.ReadString('Video', 'Filter', FFilter).Trim;
+      if FFilter.IsEmpty then
+        FFilter := 'nearest';
+      FAudioEnabled := Ini.ReadBool('Audio', 'Enabled', FAudioEnabled);
+      SetAudioVolume(Ini.ReadFloat('Audio', 'Volume', FAudioVolume));
+      LoadCoreSettings(Ini);
+    finally
+      Ini.Free;
+    end;
+  end
+  else
     Save;
 end;
 
 procedure TEmulatorConfigBase.LoadCoreSettings(Ini: TIniFile);
 begin
+
 end;
 
 procedure TEmulatorConfigBase.Save;
 begin
-  ForceDirectories(ExtractFilePath(FFileName));
+  TDirectory.CreateDirectory(ExtractFilePath(FFileName));
   var Ini := TIniFile.Create(FFileName);
   try
     Ini.WriteInteger('Video', 'Scale', FScale);
@@ -198,6 +202,7 @@ end;
 
 procedure TEmulatorConfigBase.SaveCoreSettings(Ini: TIniFile);
 begin
+
 end;
 
 procedure TEmulatorConfigBase.SetAudioEnabled(const Value: Boolean);
@@ -215,7 +220,7 @@ end;
 
 procedure TEmulatorConfigBase.SetFilter(const Value: string);
 begin
-  FFilter := Trim(Value);
+  FFilter := Value.Trim;
   if FFilter = '' then
     FFilter := 'nearest';
 end;
@@ -226,3 +231,4 @@ begin
 end;
 
 end.
+

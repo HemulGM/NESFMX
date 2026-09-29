@@ -11,10 +11,6 @@ const
   INPUT_PLAYER_COUNT = 4;
 
 type
-  TKeyMap = record
-    A, B, Select, Start, Up, Down, Left, Right: UInt32;
-  end;
-
   // Each physical device/backend owns a distinct source ID; 0 is the keyboard.
   // Releasing one source never releases a button held by another source.
   TNesInput = class

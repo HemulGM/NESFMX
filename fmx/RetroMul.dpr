@@ -64,7 +64,6 @@ uses
   NES.Mapper.Gxrom in '..\source\cores\nes\mappers\NES.Mapper.Gxrom.pas',
   NES.PPU in '..\source\cores\nes\NES.PPU.pas',
   NES.State in '..\source\cores\nes\NES.State.pas',
-  NES.SavePaths in '..\source\cores\nes\NES.SavePaths.pas',
   NES.Types in '..\source\cores\nes\NES.Types.pas',
   NES.APU in '..\source\cores\nes\NES.APU.pas',
   NES.AudioDiagnostics in '..\source\cores\nes\NES.AudioDiagnostics.pas',
@@ -102,12 +101,19 @@ uses
   GBC.Sound.Channel in '..\source\cores\gbc\GBC.Sound.Channel.pas',
   GBC.Sound in '..\source\cores\gbc\GBC.Sound.pas',
   GBC.Timer in '..\source\cores\gbc\GBC.Timer.pas',
-  SCRP.GameList in '..\source\gamelist\SCRP.GameList.pas';
+  SCRP.GameList in '..\source\gamelist\SCRP.GameList.pas',
+  RM.Styles in 'RM.Styles.pas' {FormStyles},
+  FMX.Menus in 'DelphiWinUI3\Fixes\D13\FMX.Menus.pas',
+  FMX.StyledContextMenu in 'DelphiWinUI3\Fixes\D13\FMX.StyledContextMenu.pas',
+  FMX.Windows.Hints in 'DelphiWinUI3\FMXWindowsHint\FMX.Windows.Hints.pas',
+  HGM.FMX.Image in 'HGM.FMX.Image.pas',
+  Core.SavePaths in '..\source\cores\Core.SavePaths.pas';
 
 {$R *.res}
 
 begin
   Application.Initialize;
+  FormStyles := TFormStyles.Create(Application);
   Application.CreateForm(TFormMain, FormMain);
   Application.Run;
 end.

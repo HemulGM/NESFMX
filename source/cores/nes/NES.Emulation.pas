@@ -56,7 +56,7 @@ type
     procedure TerminatedSet; override;
   public
     // Validates the ROM before replacing the current session. Call Start once.
-    constructor Create(const FileName: string; FourScoreEnabled: Boolean = False; RegionOverride: TRegionOverride = TRegionOverride.Auto; const SaveDirectory: string = ''; AudioEnabled: Boolean = True; AudioVolume: Single = 1);
+    constructor Create(const FileName: string; FourScoreEnabled: Boolean = False; RegionOverride: TRegionOverride = TRegionOverride.Auto; AudioEnabled: Boolean = True; AudioVolume: Single = 1);
     destructor Destroy; override;
     procedure StopAndSave;
     procedure SetKey(Code: UInt32; Pressed: Boolean; const Keys, Keys2: TKeyMap); overload;
@@ -85,7 +85,8 @@ uses
   Androidapi.Helpers, Androidapi.JNIBridge, Androidapi.JNI.JavaTypes,
   Androidapi.JNI.Os,
   {$ENDIF}
-  System.Diagnostics, System.Math, System.IOUtils, NES.Consts, NES.SavePaths, PCM.Audio.Null;
+  System.Diagnostics, System.Math, System.IOUtils, NES.Consts, Core.SavePaths,
+  PCM.Audio.Null;
 
 {$IFDEF ANDROID}
 
@@ -216,7 +217,7 @@ begin
 end;
 {$ENDIF}
 
-constructor TNesEmulationThread.Create(const FileName: string; FourScoreEnabled: Boolean; RegionOverride: TRegionOverride; const SaveDirectory: string; AudioEnabled: Boolean; AudioVolume: Single);
+constructor TNesEmulationThread.Create(const FileName: string; FourScoreEnabled: Boolean; RegionOverride: TRegionOverride; AudioEnabled: Boolean; AudioVolume: Single);
 begin
   inherited Create(True);
   FreeOnTerminate := False;
@@ -233,17 +234,11 @@ begin
   FAudioFormat.BlockCount := AUDIO_BLOCK_COUNT;
   FDiagnostics := TAudioDiagnostics.Create(FAudioFormat);
   FRomPath := FileName;
-  FSaveDirectory := SaveDirectory;
-  if FSaveDirectory = '' then
-    FSaveDirectory := ResolveDefaultSaveDirectory(TPath.GetDocumentsPath, TPath.GetHomePath);
+  FSaveDirectory := GetSaveDirectory;
   FConsole := TNesConsole.Create(FourScoreEnabled);
   FConsole.LoadRom(FileName, RegionOverride);
   FUsesSuborKeyboard := FConsole.SuborKeyboard.Connected;
-  FSnapshotDirectory := ResolveGameSavePath(
-    TPath.Combine(ExtractFileDir(ExcludeTrailingPathDelimiter(FSaveDirectory)), 'snapshots'),
-    FileName,
-    FConsole.RomIdentity,
-    '');
+  FSnapshotDirectory := ResolveGameSavePath(GetSnapshotDirectory, FileName, FConsole.RomIdentity, '');
   FStatus.Region := FConsole.Region;
   FConsole.Apu.SetSampleRate(NES_SAMPLE_RATE);
 end;

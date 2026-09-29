@@ -1,4 +1,4 @@
-unit SCRP.GameList;
+﻿unit SCRP.GameList;
 
 interface
 
@@ -25,6 +25,18 @@ type
     property Web: string read FWeb write FWeb;
   end;
 
+  TGameMap = class
+  private
+    FPath: string;
+    FTitle: string;
+  public
+    procedure LoadFromXML(const ANode: IXMLNode);
+    function SaveToXML(const AParent: IXMLNode): IXMLNode;
+
+    property Path: string read FPath write FPath;
+    property Title: string read FTitle write FTitle;
+  end;
+
   TGame = class
   private
     FID: string;
@@ -48,10 +60,15 @@ type
     FVideo: string;
     FManual: string;
     FFavorite: Boolean;
-    FHasFavorite: Boolean;
+    FTips: string;
+    FMaps: TObjectList<TGameMap>;
+    function GetRomName: string;
+    function GetRomNameWoExt: string;
   public
     constructor Create;
+    destructor Destroy; override;
     procedure Clear;
+    function GetPhysicalPath(const ARootFolder, APath: string): string;
 
     procedure LoadFromXML(const ANode: IXMLNode);
     function SaveToXML(const AParent: IXMLNode): IXMLNode;
@@ -76,9 +93,12 @@ type
     property Thumbnail: string read FThumbnail write FThumbnail;
     property Video: string read FVideo write FVideo;
     property Manual: string read FManual write FManual;
-
+    property Tips: string read FTips write FTips;
+    property Maps: TObjectList<TGameMap> read FMaps;
     property Favorite: Boolean read FFavorite write FFavorite;
-    property HasFavorite: Boolean read FHasFavorite write FHasFavorite;
+    //
+    property RomName: string read GetRomName;
+    property RomNameWoExt: string read GetRomNameWoExt;
   end;
 
   TGameList = class
@@ -92,7 +112,7 @@ type
     procedure Clear;
 
     procedure LoadFromXML(const ANode: IXMLNode);
-    function SaveToXML(const ADocument: IXMLDocument): IXMLNode;
+    procedure SaveToXML(const ADocument: IXMLDocument);
 
     procedure LoadFromFile(const AFileName: string);
     procedure SaveToFile(const AFileName: string);
@@ -103,9 +123,8 @@ type
 
 implementation
 
-{ ---------------------------------------------------------------------------
-  XML helpers
-  --------------------------------------------------------------------------- }
+uses
+  System.IOUtils;
 
 function XMLChild(const AParent: IXMLNode; const AName: string): IXMLNode;
 begin
@@ -113,10 +132,8 @@ begin
 end;
 
 function XMLReadString(const AParent: IXMLNode; const AName: string): string;
-var
-  Node: IXMLNode;
 begin
-  Node := XMLChild(AParent, AName);
+  var Node := XMLChild(AParent, AName);
 
   if Assigned(Node) then
     Result := Node.Text
@@ -133,24 +150,17 @@ begin
 end;
 
 function XMLReadBool(const AParent: IXMLNode; const AName: string; const ADefault: Boolean = False): Boolean;
-var
-  S: string;
-  Node: IXMLNode;
 begin
-  Node := XMLChild(AParent, AName);
+  var Node := XMLChild(AParent, AName);
 
   if not Assigned(Node) then
     Exit(ADefault);
 
-  S := LowerCase(Trim(Node.Text));
-
-  if S = '' then
+  var S := Node.Text.Trim.ToLower;
+  if S.IsEmpty then
     Exit(ADefault);
 
-  Result :=
-    (S = 'true') or
-    (S = '1') or
-    (S = 'yes');
+  Result := (S = 'true') or (S = '1') or (S = 'yes');
 end;
 
 function XMLAddElement(const AParent: IXMLNode; const AName: string; const AValue: string): IXMLNode;
@@ -173,9 +183,7 @@ begin
     Result := 'false';
 end;
 
-{ ---------------------------------------------------------------------------
-  TGameProvider
-  --------------------------------------------------------------------------- }
+{ TGameProvider }
 
 procedure TGameProvider.Clear;
 begin
@@ -208,18 +216,42 @@ begin
   XMLAddElement(Result, 'web', FWeb);
 end;
 
-{ ---------------------------------------------------------------------------
-  TGame
-  --------------------------------------------------------------------------- }
+{ TGame }
 
 constructor TGame.Create;
 begin
   inherited Create;
+  FMaps := TObjectList<TGameMap>.Create;
   Clear;
+end;
+
+destructor TGame.Destroy;
+begin
+  FMaps.Free;
+  inherited;
+end;
+
+function TGame.GetPhysicalPath(const ARootFolder, APath: string): string;
+begin
+  if APath.IsEmpty then
+    Result := ''
+  else
+    Result := TPath.Combine(ARootFolder, APath.Replace('./', ''));
+end;
+
+function TGame.GetRomName: string;
+begin
+  Result := TPath.GetFileName(FPath);
+end;
+
+function TGame.GetRomNameWoExt: string;
+begin
+  Result := TPath.GetFileNameWithoutExtension(FPath);
 end;
 
 procedure TGame.Clear;
 begin
+  FMaps.Clear;
   FID := '';
   FSource := '';
 
@@ -240,9 +272,8 @@ begin
   FThumbnail := '';
   FVideo := '';
   FManual := '';
-
   FFavorite := False;
-  FHasFavorite := False;
+  FTips := '';
 end;
 
 procedure TGame.LoadFromXML(const ANode: IXMLNode);
@@ -252,11 +283,11 @@ begin
   if not Assigned(ANode) then
     Exit;
 
-  { Attributes }
+  // Attributes
   FID := XMLReadAttribute(ANode, 'id');
   FSource := XMLReadAttribute(ANode, 'source');
 
-  { Fields }
+  // Fields
   FPath := XMLReadString(ANode, 'path');
   FName := XMLReadString(ANode, 'name');
   FDesc := XMLReadString(ANode, 'desc');
@@ -274,12 +305,32 @@ begin
   FThumbnail := XMLReadString(ANode, 'thumbnail');
   FVideo := XMLReadString(ANode, 'video');
   FManual := XMLReadString(ANode, 'manual');
+  FFavorite := XMLReadBool(ANode, 'favorite');
+  FTips := XMLReadString(ANode, 'tips');
 
-  { favorite is optional }
-  if Assigned(XMLChild(ANode, 'favorite')) then
+  var MapsNode := XMLChild(ANode, 'maps');
+  if Assigned(MapsNode) then
   begin
-    FHasFavorite := True;
-    FFavorite := XMLReadBool(ANode, 'favorite');
+    var MapNode := XMLChild(MapsNode, 'map');
+    while Assigned(MapNode) do
+    begin
+      if (MapNode.NodeType <> ntElement) or (MapNode.NodeName <> 'map') then
+      begin
+        MapNode := MapNode.NextSibling;
+        Continue;
+      end;
+
+      var Map := TGameMap.Create;
+      try
+        Map.LoadFromXML(MapNode);
+      except
+        Map.Free;
+        raise;
+      end;
+      FMaps.Add(Map);
+
+      MapNode := MapNode.NextSibling;
+    end;
   end;
 end;
 
@@ -287,14 +338,14 @@ function TGame.SaveToXML(const AParent: IXMLNode): IXMLNode;
 begin
   Result := AParent.AddChild('game');
 
-  { Attributes }
+  // Attributes
   if FID <> '' then
     XMLAddAttribute(Result, 'id', FID);
 
   if FSource <> '' then
     XMLAddAttribute(Result, 'source', FSource);
 
-  { Fields }
+  // Fields
   if FPath <> '' then
     XMLAddElement(Result, 'path', FPath);
 
@@ -346,13 +397,22 @@ begin
   if FManual <> '' then
     XMLAddElement(Result, 'manual', FManual);
 
-  if FHasFavorite then
+  if FTips <> '' then
+    XMLAddElement(Result, 'tips', FTips);
+
+  if FMaps.Count > 0 then
+  begin
+    var MapsNode := Result.AddChild('maps');
+
+    for var Map in FMaps do
+      Map.SaveToXML(MapsNode);
+  end;
+
+  if FFavorite then
     XMLAddElement(Result, 'favorite', XMLBoolToString(FFavorite));
 end;
 
-{ ---------------------------------------------------------------------------
-  TGameList
-  --------------------------------------------------------------------------- }
+{ TGameList }
 
 constructor TGameList.Create;
 begin
@@ -377,79 +437,72 @@ begin
 end;
 
 procedure TGameList.LoadFromXML(const ANode: IXMLNode);
-var
-  Node: IXMLNode;
-  Game: TGame;
 begin
   Clear;
 
   if not Assigned(ANode) then
     Exit;
 
-  { provider }
-  Node := XMLChild(ANode, 'provider');
+  // provider
+  var ProviderNode := XMLChild(ANode, 'provider');
+  if Assigned(ProviderNode) then
+    FProvider.LoadFromXML(ProviderNode);
 
-  if Assigned(Node) then
-    FProvider.LoadFromXML(Node);
-
-  { games }
-  Node := ANode.ChildNodes.First;
-
-  while Assigned(Node) do
+  // games
+  var GamesNode := ANode.ChildNodes.First;
+  while Assigned(GamesNode) do
   begin
-    if (Node.NodeType <> ntElement) or (Node.NodeName <> 'game') then
+    if (GamesNode.NodeType <> ntElement) or (GamesNode.NodeName <> 'game') then
     begin
-      Node := Node.NextSibling;
+      GamesNode := GamesNode.NextSibling;
       Continue;
     end;
-    Game := TGame.Create;
 
+    var Game := TGame.Create;
     try
-      Game.LoadFromXML(Node);
-      FGames.Add(Game);
+      Game.LoadFromXML(GamesNode);
     except
       Game.Free;
       raise;
     end;
+    FGames.Add(Game);
 
-    Node := Node.NextSibling;
-
+    GamesNode := GamesNode.NextSibling;
   end;
 end;
 
-function TGameList.SaveToXML(const ADocument: IXMLDocument): IXMLNode;
-var
-  Root: IXMLNode;
-  Game: TGame;
+procedure TGameList.SaveToXML(const ADocument: IXMLDocument);
 begin
   if not Assigned(ADocument) then
     raise EArgumentNilException.Create('ADocument');
 
   ADocument.Active := True;
   ADocument.ChildNodes.Clear;
-  Root := ADocument.AddChild('gameList');
+
+  ADocument.Encoding := 'utf-8';
+  ADocument.StandAlone := 'yes';
+  ADocument.Version := '1.0';
+
+  var Root := ADocument.AddChild('gameList');
 
   FProvider.SaveToXML(Root);
 
-  for Game in FGames do
+  for var Game in FGames do
     Game.SaveToXML(Root);
-
-  Result := Root;
 end;
 
 procedure TGameList.LoadFromFile(const AFileName: string);
-var
-  XML: IXMLDocument;
-  Root: IXMLNode;
 begin
   var Document := TXMLDocument.Create(nil);
-  XML := Document;
   Document.DOMVendor := GetDOMVendor(sOmniXmlVendor);
+
+  var XML: IXMLDocument := Document;
   XML.LoadFromFile(AFileName);
+
   if not XML.Active then
     raise Exception.CreateFmt('Unable to load XML file: %s', [AFileName]);
 
-  Root := XML.DocumentElement;
+  var Root := XML.DocumentElement;
 
   if not Assigned(Root) then
     raise Exception.Create('XML document has no root element');
@@ -461,23 +514,43 @@ begin
 end;
 
 procedure TGameList.SaveToFile(const AFileName: string);
-var
-  XML: IXMLDocument;
 begin
   var Document := TXMLDocument.Create(nil);
-  XML := Document;
   Document.DOMVendor := GetDOMVendor(sOmniXmlVendor);
-  XML.Active := True;
-  XML.Encoding := 'UTF-8';
-  //XML.Standalone := True;
 
+  var XML: IXMLDocument := Document;
   SaveToXML(XML);
-
   try
-    XML.SaveToFile(AFileName)
+    XML.SaveToFile(AFileName);
   except
-    raise Exception.CreateFmt('Unable to save XML file: %s', [AFileName]);
+    on E: Exception do
+      raise Exception.CreateFmt('Unable to save XML file: %s' + sLineBreak + '%s', [AFileName, E.Message]);
   end;
+end;
+
+{ TGameMap }
+
+procedure TGameMap.LoadFromXML(const ANode: IXMLNode);
+begin
+  FPath := '';
+  FTitle := '';
+
+  if not Assigned(ANode) then
+    Exit;
+
+  FPath := XMLReadAttribute(ANode, 'path');
+  FTitle := XMLReadAttribute(ANode, 'title');
+end;
+
+function TGameMap.SaveToXML(const AParent: IXMLNode): IXMLNode;
+begin
+  Result := AParent.AddChild('map');
+
+  if FPath <> '' then
+    XMLAddAttribute(Result, 'path', FPath);
+
+  if FTitle <> '' then
+    XMLAddAttribute(Result, 'title', FTitle);
 end;
 
 end.

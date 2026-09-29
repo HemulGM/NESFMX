@@ -1,11 +1,9 @@
-# RetroMul — Delphi / FireMonkey
+﻿# RetroMul — Delphi / FireMonkey
 
-A Delphi multi-system emulator with an FMX interface for NES, Game Boy and Game Boy Color.
+A Delphi multi-system emulator with an FMX interface for NES, Game Boy and Game Boy Color, Mega Drive (Genesis).
 For NES, 47 mapper numbers are supported:
 NROM, MMC1–MMC5, UxROM, CNROM, AxROM, Color Dreams, GxROM, Bandai, VRC,
-Sunsoft, RAMBO-1, Namco 108, JY and other boards from the proven ROM collection.
-A list of implementations, test results, and limitations are provided in
-[description of mappers](EXTENDED_MAPPERS.md).
+Sunsoft, RAMBO-1, Namco 108, JY, Subor and other boards from the proven ROM collection.
 Audio output is implemented for Windows (Win32/Win64), Linux64, Android (ARM/ARM64),
 macOS (Intel/Apple Silicon) and iOS.
 
@@ -38,26 +36,13 @@ Open `fmx/RetroMul.dproj` in RAD Studio with Delphi FMX support, select
 Win32 or Win64 and run Build. The form `fmx/RM.Main.fmx` is available for
 visual editing. Sources are grouped by responsibility:
 
-```
-source/
-  PCM/             shared platform audio backend (Git submodule)
-  cores/
-    Core.Emulation.pas       frontend/core contract
-    Core.Adapter.NES.pas      NES adapter
-    Core.Adapter.GB.pas  Game Boy adapter
-    nes/
-      mappers/
-    gb/
-```
-
 `IEmulationCore` is the frontend boundary for every console: it receives a
 logical eight-button input state and produces a size-tagged, row-major FMX
 frame. Platform-specific settings stay in the adapter, so a future core only
 needs an adapter plus a folder under `source/cores/`. The current frontend
-selects NES for .nes, Game Boy for .gb, and Game Boy Color for .gbc ROMs.
-All three adapters support reset. GB/GBC save states remain unsupported.
-See [the multi-system audit](MULTICORE_AUDIT.md) for regression checks and remaining limitations.
-Overflow and range checks are included in Debug and Release.
+selects NES for .nes, Game Boy for .gb, Game Boy Color for .gbc,
+and SEGA Mega Drive (Genesis) for .smd, .bin, .gen, .md ROMs.
+All three adapters support reset. GB/GBC/SEGA save states remain unsupported.
 Tested with Delphi 13 / compiler 37.0.
 
 The audio subsystem is separate from the platform API: `PCM.Audio` provides a common
@@ -66,138 +51,11 @@ ALSA, `PCM.Audio.Android.AudioTrack` via AudioTrack, and `PCM.Audio.Apple.AudioQ
 AudioToolbox on macOS/iOS. Unsupported platforms use `PCM.Audio.Null`:
 emulation continues without sound, with the reason available through `Audio.Error`.
 
-### macOS and iOS audio
-
-The factory automatically selects `TPCMAudioBackendApple` for Apple targets,
-unless `PCM_AUDIO_NULL` is defined. AudioToolbox is a system framework; no
-third-party audio library or microphone permission is required for playback.
-Build with the appropriate Delphi Apple SDK and deploy through PAServer.
-
-The backend copies PCM16 mono at 44100 Hz into four native buffers of up to
-1024 samples. It primes two blocks before starting Audio Queue and retries a
-temporary `kAudioQueueErr_CannotStartYet` result; a full queue drops new samples
-without waiting for playback.
-Audio Queue delivers callbacks on its own thread, so the emulation worker
-does not need a run loop. Clear synchronously stops/resets the queue; subsequent
-PCM restarts playback. Disposal stops callbacks before releasing their buffers.
-Queue diagnostics report submitted/dropped samples and occupied buffers;
-`PositionKnown` remains false because a returned buffer is reusable but may
-not yet have reached the speakers.
-
-On iOS the backend activates the application's shared AVAudioSession without
-changing its category. The default category respects the silent switch and
-does not enable background playback. If session activation is temporarily
-denied (for example during an interruption), pending sound is cleared and
-activation is retried on a later submission. Other native failures close the
-queue and are reported through `Audio.Error`.
-
-Verified with Delphi 13: host tests pass on Win32/Win64; the backend and factory
-compile with Q+/R+ for OSX64, OSXARM64, iOSDevice64 and iOSSimARM64. Apple linking
-and device playback still require validation with an installed Apple SDK and
-hardware (not available in the Windows development environment used here).
-On each Apple target, check audible ROM playback, pause/resume, reset, ROM
-replacement and shutdown; on iOS also check silent mode, interruptions and
-audio route changes.
-
-API reference: [Apple Audio Queue Services](https://developer.apple.com/documentation/audiotoolbox/audio-queue-services).
-
-### Adding another audio backend
-
-To add sound for the platform:
-
-1. Create the NES module.Audio.<Platform>` with the implementation of `INesAudioBackend`
-   from `source/NES.Audio.Backend.pas'.
-2. Connect it conditionally to `source/NES.Audio.Factory.pas` and add a branch
-   creations in the 'CreatePlatformAudioBackend'. The OS API dependencies remain
-inside the platform module.
-3. Implement non-blocking PCM16 mono 44100 Hz reception, queue clearing,
-   queue status and error message. `Submit` copies the input data
-   until return; the queue is limited to four blocks of 1024 samples each.
-   Counters of accepted/discarded samples are saved after `Clear`;
-   the device position only makes sense if `PositionKnown = True'.
-
-The 'NES.Emulation` thread creates, uses, and releases a device in its
-`Execute'; the implementation itself synchronizes native callbacks and stops
-them before releasing buffers. For tests, you can pass your own backend
-to `TNesAudio.Create(Backend)`. The conditional character `PCM_AUDIO_NULL` selects
-the device-free mode on any OS, including Windows; in it, samples are counted as
-discarded, `DeviceOpen` and `PositionKnown` remain `False'.
-
-### Sound on Android
-
-Android and Android64 builds automatically select `TNesAndroidAudioBackend`.
-The JNI adapter in `NES.Audio.AudioTrack` uses the system `android.media.AudioTrack`
-through Delphi's `Androidapi.JNI.Media`; no additional native library is needed.
-Android 6.0 / API 23 is required, matching the project's existing minimum SDK.
-
-The track uses `USAGE_GAME`, `MODE_STREAM`, mono PCM16 at 44100 Hz, and
-`write(short[], ..., WRITE_NON_BLOCKING)`. One Java sample array is reused;
-PCM is copied and JNI array elements are released before each Java write.
-Partial and zero writes count the unaccepted samples as dropped without waiting
-or building another queue. AudioTrack handles playback/refilling after underruns.
-
-The backend checks both `getMinBufferSize` (bytes) and the actual track capacity
-(frames). The queue stays within 4096 samples, about 93 ms of PCM. If the device
-requires a larger buffer, initialization reports an error instead of leaving a
-track that can never be filled enough to start. This buffer limit does not imply
-a guaranteed speaker/Bluetooth latency.
-
-`getPlaybackHeadPosition` supplies the unsigned 32-bit playback counter, including
-its sign-bit crossing and wrap. `Clear` pauses and flushes the track, resets queue
-position, and restarts playback when new PCM arrives. Lifetime submitted/dropped
-totals are preserved. `ERROR_DEAD_OBJECT` triggers one recreate-and-write retry;
-other failures are reported through `Audio.Error` and playback is closed.
-Initialization, calls and release all run on the emulation thread.
-
-The ARM and ARM64 native FMX libraries compile with Q+/R+. Automated device-boundary
-tests cover accounting and lifecycle; playback on an Android device still needs
-validation (no ADB device was connected during implementation).
-API reference: [Android AudioTrack](https://developer.android.com/reference/android/media/AudioTrack).
-
-### Sound in Linux
-
-When building Linux64` the factory automatically selects `TNesLinuxAudioBackend'.
-It dynamically loads the system `libasound.so.2'; the C API declarations are
-in the 'NES.Audio.Alsa`. Static linking with ALSA and its headers
-are not needed for Delphi assembly. The FMX application itself requires FMX support for Linux and the SDK.
-
-Data path: APU → PCM16 mono 44100 Hz → `TNesAudio` → ALSA `default` →
-audio output configured in the system. `default` allows you to use the settings
-ALSA, including routing via PulseAudio/PipeWire, if
-the corresponding ALSA plugin is installed and configured. This is not a direct connection to the API of these
-servers. In WSL, the sound goes through the configured ALSA plug-in to WSLg/PulseAudio.
-
-'snd_pcm_open` uses `SND_PCM_NONBLOCK`, and `snd_pcm_writei' copies the PCM
-to the ALSA queue. Emulation does not wait for playback: when there is a full queue or partial
-recording, the remaining samples are counted as discarded. The amount
-of queued data is limited to 4096 samples (about 93 ms); the initial filling
-before the explicit start is about 46 ms. These are the parameters of the client buffer, and not
-a guarantee of a full delay to the speakers: the server/device can add its own.
-
-After underrun (`EPIPE`) or suspension (`ESTRPIPE`), the backend calls
-`snd_pcm_prepare` and starts filling the queue again, without a waiting cycle.
-`Clear` performs `snd_pcm_drop` + `snd_pcm_prepare'; closing resets the queue
-without waiting for it to be played. `QueuedBlocks' for ALSA is the equivalent of the number
-of 1024 sample blocks, since ALSA stores the stream, not the boundaries of our blocks.
-The playback position is calculated based on the number of samples received and the ALSA delay;
-if the position is unknown, `PositionKnown = False'. Reset/Restore starts
-a new position count, keeping the total counters of sending and loss.
-
-If the library, device, or desired format are not available, the error gets into
-`Audio.Error` and diagnostics, but the emulation continues without sound. To check
-the `default` setting, you can use `aplay -L'. An alternative device name
-can be passed to the `TNesLinuxAudioBackend' constructor.Create('name')`.
-
-API Contracts: [ALSA PCM](https://www.alsa-project.org/alsa-doc/alsa-lib/pcm.html ),
-[function reference](https://www.alsa-project.org/alsa-doc/alsa-lib/group___p_c_m.html ).
-
 ## Launch and management
 
-Run the EXE and select `.nes` in the dialog or pass the path in the command line:
+Run the EXE and select `rom` in the dialog
 
-```bat
-fmx\Win64\Release\NESFMX.exe "C:\ROMs\game.nes"
-```
+## Game
 
 | Key | Action |
 | --- | --- |
@@ -224,91 +82,13 @@ The window can be scaled;
 the proportions of the image are preserved. An invalid ROM does not replace the current game.
 If the sound device is unavailable, the app informs you about it and runs without sound.
 
-## Settings
-
-The `config.ini` is read next to the EXE and is created at the first startup.
-Copy the existing INI to the compiled EXE to transfer your settings.
-The application folder must be writable when creating the INI.
-
-```ini
-[Video]
-Scale=2
-Filter=nearest
-Region=Auto
-[Input]
-FourScore=1
-[Controls]
-A=Z
-B=X
-Select=SPACE
-Start=RETURN
-Up=UP
-Down=DOWN
-Left=LEFT
-Right=RIGHT
-[Controls2]
-A=G
-B=H
-Select=T
-Start=Y
-Up=W
-Down=S
-Left=A
-Right=D
-[Controls3]
-A=N
-B=M
-Select=U
-Start=O
-Up=I
-Down=K
-Left=J
-Right=L
-[Controls4]
-A=NUMPAD1
-B=NUMPAD3
-Select=NUMPAD7
-Start=NUMPAD9
-Up=NUMPAD8
-Down=NUMPAD5
-Left=NUMPAD4
-Right=NUMPAD6
-```
 
 Four virtual NES gamepads are independently controlled from the keyboard.
 By default, the NES Four Score adapter is enabled: port `$4016` transmits buttons
 for players 1 and 3, port `$4017` for players 2 and 4, then each port transmits
 the adapter signature. The game must support Four Score; the number of players
 is selected in the game itself. The Famicom protocol for four players has not yet been implemented.
-Protocol description: [NESdev](https://www.nesdev.org/wiki/Controller_detection#Four_Score ).
-
-The sections `[Controls]`, `[Controls2]`, `[Controls3]` and `[Controls4] define
-the keys of the respective players. The old INI works with default settings
-for missing partitions; existing assignments are retained.
-To reassign, add the required section to the INI and restart the application.
-'NUMPAD0`–`NUMPAD9` denote a separate numeric block; turn on Num Lock.
-
-For the usual two controllers and the previous control of the Power Pad with the keys
-of the first player, set `FourScore=0` in the `[Input]` section and restart
-the application. The Power Pad is disabled in Four Score mode.
-Input from physical USB/Bluetooth gamepads has not yet been implemented.
-
-The input is separated from the form in `source/NES.Input.pas`: `TNesInput` stores the states
-of the four players by source IDs (0 is the keyboard). The future handler
-of the external device passes the buttons through the `SetButton', and when disconnected, it calls
-`ReleaseSource`. Source clicks are combined: releasing a button on one
-device does not cancel pressing on the other. `Apply` transmits the final state
-to the NES port; `Clear' resets all sources when focus is lost or ROM is changed.
-
-`Scale` is limited to the range 1-8. `Filter=nearest` disables interpolation,
-`linear` includes it. Valid assignments are: A–Z, 0-9, SPACE, RETURN/ENTER,
-UP, DOWN, LEFT, RIGHT, NUMPAD0–NUMPAD9. Incorrect assignments are replaced with default values.
-R, F5, F6, Esc, and Ctrl+O are used as service combinations.
-
-`Region=Auto` uses the ROM header. `Region=NTSC` and `Region=PAL` override it;
-NES 2.0 ROMs marked Dendy use the Dendy timing automatically: a 1.773448 MHz
-CPU/APU clock with NTSC APU period tables, and a 312-line PPU frame at
-approximately 50 Hz; its NMI begins on scanline 291.
+Protocol description: [NESdev](https://www.nesdev.org/wiki/Controller_detection#Four_Score).
 
 Mapper 167 Subor educational-computer ROMs automatically connect the Subor
 Keyboard. The PC keyboard then supplies its 13-row matrix through `$4016/$4017`;

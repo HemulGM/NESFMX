@@ -101,8 +101,7 @@ begin
   inherited Create;
   FConfig := TNesEmulatorConfig.Create(EmulatorConfigFileName('nes'));
   FConfig.Load;
-  FThread := TNesEmulationThread.Create(FileName, FConfig.FourScore, FConfig.Region,
-    '', FConfig.AudioEnabled, FConfig.AudioVolume);
+  FThread := TNesEmulationThread.Create(FileName, FConfig.FourScore, FConfig.Region, FConfig.AudioEnabled, FConfig.AudioVolume);
 end;
 
 destructor TNesCoreAdapter.Destroy;

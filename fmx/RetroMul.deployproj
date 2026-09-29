@@ -11,6 +11,24 @@
     </PropertyGroup>
     <ItemGroup Condition="'$(Platform)'=='WinARM64EC'"/>
     <ItemGroup Condition="'$(Platform)'=='OSX64'">
+        <DeployFile Include="$(ProjectName).Artwork\macOS\AppIcon.icns" Condition="'$(Config)'=='Debug'">
+            <RemoteDir>RetroMul.app\Contents\Resources\</RemoteDir>
+            <RemoteName>RetroMul.icns</RemoteName>
+            <DeployClass>ProjectOSXResource</DeployClass>
+            <Operation>1</Operation>
+            <LocalCommand/>
+            <RemoteCommand/>
+            <Overwrite>True</Overwrite>
+        </DeployFile>
+        <DeployFile Include="OSX64\Debug\RetroMul.info.plist" Condition="'$(Config)'=='Debug'">
+            <RemoteDir>RetroMul.app\Contents\</RemoteDir>
+            <RemoteName>Info.plist</RemoteName>
+            <DeployClass>ProjectOSXInfoPList</DeployClass>
+            <Operation>1</Operation>
+            <LocalCommand/>
+            <RemoteCommand/>
+            <Overwrite>True</Overwrite>
+        </DeployFile>
         <DeployFile Include="$(BDS)\bin\delphi_PROJECTICNS.icns" Condition="'$(Config)'=='Release'">
             <RemoteDir>RetroMul.app\Contents\Resources\</RemoteDir>
             <RemoteName>RetroMul.icns</RemoteName>
@@ -20,10 +38,47 @@
             <RemoteCommand/>
             <Overwrite>True</Overwrite>
         </DeployFile>
+        <DeployFile Include="OSX64\Debug\RetroMul.entitlements" Condition="'$(Config)'=='Debug'">
+            <RemoteDir>RetroMul.app\..\</RemoteDir>
+            <RemoteName>RetroMul.entitlements</RemoteName>
+            <DeployClass>ProjectOSXEntitlements</DeployClass>
+            <Operation>1</Operation>
+            <LocalCommand/>
+            <RemoteCommand/>
+            <Overwrite>True</Overwrite>
+        </DeployFile>
+        <DeployFile Include="OSX64\Debug\RetroMul" Condition="'$(Config)'=='Debug'">
+            <RemoteDir>RetroMul.app\Contents\MacOS\</RemoteDir>
+            <RemoteName>RetroMul</RemoteName>
+            <DeployClass>ProjectOutput</DeployClass>
+            <Operation>1</Operation>
+            <LocalCommand/>
+            <RemoteCommand/>
+            <Overwrite>True</Overwrite>
+            <Required>True</Required>
+        </DeployFile>
+        <DeployFile Include="RetroMul.Artwork\Windows\Uwp_150.png" Condition="'$(Config)'=='Debug'">
+            <RemoteDir>RetroMul.app\Contents\Resources\StartUp\</RemoteDir>
+            <RemoteName>Uwp_150.png</RemoteName>
+            <DeployClass>ProjectFile</DeployClass>
+            <Operation>0</Operation>
+            <LocalCommand/>
+            <RemoteCommand/>
+            <Overwrite>True</Overwrite>
+        </DeployFile>
         <DeployFile Include="OSX64\Release\RetroMul.info.plist" Condition="'$(Config)'=='Release'">
             <RemoteDir>RetroMul.app\Contents\</RemoteDir>
             <RemoteName>Info.plist</RemoteName>
             <DeployClass>ProjectOSXInfoPList</DeployClass>
+            <Operation>1</Operation>
+            <LocalCommand/>
+            <RemoteCommand/>
+            <Overwrite>True</Overwrite>
+        </DeployFile>
+        <DeployFile Include="OSX64\Debug\RetroMul.dSYM" Condition="'$(Config)'=='Debug'">
+            <RemoteDir>RetroMul.app\..\$(PROJECTNAME).app.dSYM\Contents\Resources\DWARF\</RemoteDir>
+            <RemoteName>RetroMul</RemoteName>
+            <DeployClass>ProjectOSXDebug</DeployClass>
             <Operation>1</Operation>
             <LocalCommand/>
             <RemoteCommand/>

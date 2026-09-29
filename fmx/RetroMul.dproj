@@ -163,7 +163,7 @@
         <Icon_MainIcon>$(BDS)\bin\delphi_PROJECTICON.ico</Icon_MainIcon>
         <Icns_MainIcns>$(BDS)\bin\delphi_PROJECTICNS.icns</Icns_MainIcns>
         <SanitizedProjectName>RetroMul</SanitizedProjectName>
-        <DCC_UnitSearchPath>..\source\cores;..\source\cores\md;..\source\cores\nes;..\source\cores\nes\mappers;..\source\cores\gb;..\source\cores\gbc;..\source\gamelist;..\source\PCM;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>..\source\cores;..\source\cores\md;..\source\cores\nes;..\source\cores\nes\mappers;..\source\cores\gb;..\source\cores\gbc;..\source\gamelist;..\source\PCM;DelphiWinUI3\Sources;DelphiWinUI3\DelphiWindowStyle;DelphiWinUI3\FMXWindowsDispatch;DelphiWinUI3\FMXWindowsHint;DelphiWinUI3\WindowsNotificationManager;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Android)'!=''">
         <DCC_UsePackage>fmx;DbxCommonDriver;bindengine;IndyIPCommon;emsclient;IndyProtocols;dbxcds;FmxTeeUI;FireDACSqliteDriver;DbxClientDriver;soapmidas;dbexpress;inet;FireDACDBXDriver;CustomIPTransport;IndySystem;FireDACCommon;emsserverresource;bindcompdbx;rtl;DBXSqliteDriver;DataSnapFireDAC;FireDAC;xmlrtl;dsnap;DataSnapNativeClient;emshosting;FireDACCommonDriver;IndyIPClient;emsedge;bindcompfmx;fmxFireDAC;FMXAudioHGM;DataSnapCommon;fmxase;dbrtl;DBXInterBaseDriver;bindcomp;VLCPlayer;inetstn;IndyCore;RESTBackendComponents;RESTComponents;IndyIPServer;dsnapxml;DataSnapClient;DataSnapProviderClient;emsclientfiredac;FireDACDSDriver;tethering;CloudService;FMXTee;soaprtl;soapserver;FireDACIBDriver;$(DCC_UsePackage)</DCC_UsePackage>
@@ -381,6 +381,8 @@
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Locale>1033</VerInfo_Locale>
+        <Icon_MainIcon>$(ProjectName).Artwork\Windows\AppIcon.ico</Icon_MainIcon>
+        <Icns_MainIcns>$(ProjectName).Artwork\Windows\AppIcon.icns</Icns_MainIcns>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1_Win64)'!=''">
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
@@ -471,7 +473,6 @@
         <DCCReference Include="..\source\cores\nes\mappers\NES.Mapper.Gxrom.pas"/>
         <DCCReference Include="..\source\cores\nes\NES.PPU.pas"/>
         <DCCReference Include="..\source\cores\nes\NES.State.pas"/>
-        <DCCReference Include="..\source\cores\nes\NES.SavePaths.pas"/>
         <DCCReference Include="..\source\cores\nes\NES.Types.pas"/>
         <DCCReference Include="..\source\cores\nes\NES.APU.pas"/>
         <DCCReference Include="..\source\cores\nes\NES.AudioDiagnostics.pas"/>
@@ -510,10 +511,24 @@
         <DCCReference Include="..\source\cores\gbc\GBC.Sound.pas"/>
         <DCCReference Include="..\source\cores\gbc\GBC.Timer.pas"/>
         <DCCReference Include="..\source\gamelist\SCRP.GameList.pas"/>
+        <DCCReference Include="RM.Styles.pas">
+            <Form>FormStyles</Form>
+            <FormType>fmx</FormType>
+        </DCCReference>
+        <DCCReference Include="DelphiWinUI3\Fixes\D13\FMX.Menus.pas"/>
+        <DCCReference Include="DelphiWinUI3\Fixes\D13\FMX.StyledContextMenu.pas"/>
+        <DCCReference Include="DelphiWinUI3\FMXWindowsHint\FMX.Windows.Hints.pas"/>
+        <DCCReference Include="HGM.FMX.Image.pas"/>
+        <DCCReference Include="..\source\cores\Core.SavePaths.pas"/>
         <RcItem Include="RetroMul.Artwork\Windows\Uwp_150.png">
             <ResourceType>RCDATA</ResourceType>
             <ResourceId>MainIcon</ResourceId>
         </RcItem>
+        <None Include="AndroidManifest.template.xml"/>
+        <None Include="Entitlement.TemplateOSX.xml"/>
+        <None Include="info.plist.TemplateOSX.xml"/>
+        <None Include="NES.Gamepad.md"/>
+        <None Include="..\README.md"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
@@ -883,6 +898,18 @@
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>
+                <DeployFile LocalName="$(ProjectName).Artwork\macOS\AppIcon.icns" Configuration="Debug" Class="ProjectOSXResource">
+                    <Platform Name="OSX64">
+                        <RemoteName>RetroMul.icns</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="..\README.md" Configuration="Debug" Class="ProjectFile">
+                    <Platform Name="Win32">
+                        <RemoteDir>.\</RemoteDir>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
                 <DeployFile LocalName="Android64\Debug\AndroidManifest.xml" Configuration="Debug" Class="ProjectAndroidManifest">
                     <Platform Name="Android64">
                         <Overwrite>true</Overwrite>
@@ -1027,6 +1054,18 @@
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>
+                <DeployFile LocalName="AndroidManifest.template.xml" Configuration="Debug" Class="ProjectFile">
+                    <Platform Name="Win32">
+                        <RemoteDir>.\</RemoteDir>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="Entitlement.TemplateOSX.xml" Configuration="Debug" Class="ProjectFile">
+                    <Platform Name="Win32">
+                        <RemoteDir>.\</RemoteDir>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
                 <DeployFile LocalName="Linux64\Debug\RetroMul" Configuration="Debug" Class="ProjectOutput">
                     <Platform Name="Linux64">
                         <RemoteName>RetroMul</RemoteName>
@@ -1041,6 +1080,35 @@
                 </DeployFile>
                 <DeployFile LocalName="Linux64\Release\RetroMul" Configuration="Release" Class="ProjectOutput">
                     <Platform Name="Linux64">
+                        <RemoteName>RetroMul</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="NES.Gamepad.md" Configuration="Debug" Class="ProjectFile">
+                    <Platform Name="Win32">
+                        <RemoteDir>.\</RemoteDir>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="OSX64\Debug\RetroMul.dSYM" Configuration="Debug" Class="ProjectOSXDebug">
+                    <Platform Name="OSX64">
+                        <RemoteName>RetroMul</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="OSX64\Debug\RetroMul.entitlements" Configuration="Debug" Class="ProjectOSXEntitlements">
+                    <Platform Name="OSX64">
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="OSX64\Debug\RetroMul.info.plist" Configuration="Debug" Class="ProjectOSXInfoPList">
+                    <Platform Name="OSX64">
+                        <RemoteName>Info.plist</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="OSX64\Debug\RetroMul" Configuration="Debug" Class="ProjectOutput">
+                    <Platform Name="OSX64">
                         <RemoteName>RetroMul</RemoteName>
                         <Overwrite>true</Overwrite>
                     </Platform>
@@ -1092,6 +1160,12 @@
                     </Platform>
                 </DeployFile>
                 <DeployFile LocalName="RetroMul.Artwork\Windows\Uwp_150.png" Configuration="Debug" Class="ProjectFile">
+                    <Platform Name="OSX64">
+                        <RemoteDir>Contents\Resources\StartUp\</RemoteDir>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="RetroMul.Artwork\Windows\Uwp_150.png" Configuration="Debug" Class="ProjectFile">
                     <Platform Name="Win32">
                         <RemoteDir>.\</RemoteDir>
                         <Overwrite>true</Overwrite>
@@ -1112,6 +1186,12 @@
                 <DeployFile LocalName="Win32\Release\RetroMul.exe" Configuration="Release" Class="ProjectOutput">
                     <Platform Name="Win32">
                         <RemoteName>RetroMul.exe</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="info.plist.TemplateOSX.xml" Configuration="Debug" Class="ProjectFile">
+                    <Platform Name="Win32">
+                        <RemoteDir>.\</RemoteDir>
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>

@@ -12,6 +12,10 @@ type
 
   TNesButtons = set of TNesButton;
 
+  TKeyMap = record
+    A, B, Select, Start, Up, Down, Left, Right: UInt32;
+  end;
+
 {$SCOPEDENUMS OFF}
   TSuborKey = (
     SkA, SkB, SkC, SkD, SkE, SkF, SkG, SkH, SkI, SkJ, SkK, SkL, SkM,

@@ -59,7 +59,7 @@ uses
 
 const
   SNAPSHOT_VERSION = 2;
-  SNAPSHOT_MAGIC: array[0..7] of AnsiChar = ('N', 'E', 'S', 'F', 'M', 'X', 'S', 'S');
+  SNAPSHOT_MAGIC: array[0..7] of AnsiChar = ('R', 'E', 'T', 'R', 'O', 'M', 'U', 'L');
 
 type
   TSnapshotBitmapHeader = packed record

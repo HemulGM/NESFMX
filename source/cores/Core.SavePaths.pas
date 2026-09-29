@@ -1,29 +1,43 @@
-﻿unit NES.SavePaths;
+﻿unit Core.SavePaths;
 
 interface
 
 // An empty extension selects a snapshot directory; '.sav' selects a battery file.
 // Existing paths are reused by hash alone, including legacy hash-only names.
 
-function ResolveGameSavePath(const Root, RomFileName, Hash, Extension: string): string;
+function GetDocumentsDirectory: string;
 
-function ResolveDefaultSaveDirectory(const DocumentsDirectory, HomeDirectory: string): string;
+function GetSaveDirectory: string;
+
+function GetSnapshotDirectory: string;
+
+function ResolveGameSavePath(const Root, RomFileName, Hash, Extension: string): string;
 
 implementation
 
 uses
   System.SysUtils, System.IOUtils, System.StrUtils;
 
-function ResolveDefaultSaveDirectory(const DocumentsDirectory, HomeDirectory: string): string;
+function GetDocumentsDirectory: string;
 begin
   // Linux may have no XDG Documents entry. Never turn that into a path
-  // relative to the executable: NESFMX can then collide with the binary.
-  var Root := DocumentsDirectory;
+  // relative to the executable: It can then collide with the binary.
+  var Root := TPath.GetDocumentsPath;
   if (Root = '') or not TPath.IsPathRooted(Root) then
-    Root := HomeDirectory;
+    Root := TPath.GetHomePath;
   if (Root = '') or not TPath.IsPathRooted(Root) then
     raise EInOutError.Create('Cannot determine an absolute save directory');
-  Result := TPath.Combine(TPath.Combine(Root, 'NESFMX'), 'Saves');
+  Result := TPath.Combine(Root, 'RetroMul');
+end;
+
+function GetSnapshotDirectory: string;
+begin
+  Result := TPath.Combine(GetDocumentsDirectory, 'snapshots');
+end;
+
+function GetSaveDirectory: string;
+begin
+  Result := TPath.Combine(GetDocumentsDirectory, 'saves');
 end;
 
 function ResolveGameSavePath(const Root, RomFileName, Hash, Extension: string): string;
@@ -51,9 +65,9 @@ begin
     Exit;
   var Title := ChangeFileExt(ExtractFileName(RomFileName), '').Trim;
   // Use portable names even when moving saves between Android/Linux and Windows.
-  for var I := 1 to Length(Title) do
-    if (Ord(Title[I]) < 32) or CharInSet(Title[I], ['<', '>', ':', '"', '/', '\', '|', '?', '*']) then
-      Title[I] := '_';
+  for var i := 1 to Length(Title) do
+    if (Ord(Title[i]) < 32) or CharInSet(Title[i], ['<', '>', ':', '"', '/', '\', '|', '?', '*']) then
+      Title[i] := '_';
   Title := Copy(Title, 1, 80).Trim;
   if Title = '' then
     Title := 'Game';
