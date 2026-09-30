@@ -1,4 +1,6 @@
-﻿# RetroMul — Delphi / FireMonkey
+﻿# NESFMX — Delphi / FireMonkey
+
+Moved to: [https://github.com/HemulGM/RetroMul](https://github.com/HemulGM/RetroMul)
 
 A Delphi multi-system emulator with an FMX interface for NES, Game Boy and Game Boy Color, Mega Drive (Genesis).
 For NES, 47 mapper numbers are supported:
